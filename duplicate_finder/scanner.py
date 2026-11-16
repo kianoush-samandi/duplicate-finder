@@ -17,7 +17,7 @@ from typing import Callable, Hashable, Optional
 
 from .errors import FileChangedError
 from .hashing import full_digest, partial_digest
-from .models import DuplicateGroup, ScanResult
+from .models import DuplicateGroup, FileIssue, IssueKind, ScanResult
 from .progress import ProgressCallback, ProgressReporter, Stage
 
 PathGroups = list[list[Path]]
@@ -38,7 +38,7 @@ def find_duplicates(
     """
     root = Path(root).resolve()
     reporter = ProgressReporter(on_progress, cancel_event)
-    errors: list[str] = []
+    errors: list[FileIssue] = []
 
     files_by_size = _collect_files_by_size(root, min_size, reporter, errors)
     total_files = sum(len(paths) for paths in files_by_size.values())
@@ -65,7 +65,7 @@ def find_duplicates(
 
 
 def _collect_files_by_size(
-    root: Path, min_size: int, reporter: ProgressReporter, errors: list[str]
+    root: Path, min_size: int, reporter: ProgressReporter, errors: list[FileIssue]
 ) -> dict[int, list[Path]]:
     """Walk ``root`` and bucket regular files by size.
 
@@ -78,7 +78,7 @@ def _collect_files_by_size(
     count = 0
 
     def on_walk_error(exc: OSError) -> None:
-        errors.append(f"{exc.filename}: {exc.strerror or exc}")
+        errors.append(FileIssue.from_os_error(exc.filename, exc))
 
     for current_dir, dirs, filenames in os.walk(root, onerror=on_walk_error):
         reporter.check_cancelled()
@@ -92,7 +92,7 @@ def _collect_files_by_size(
                     continue
                 stat = path.stat()
             except OSError as exc:
-                errors.append(f"{path}: {exc.strerror or exc}")
+                errors.append(FileIssue.from_os_error(path, exc))
                 continue
 
             # Excludes FIFOs, sockets and devices, which must never be read.
@@ -115,7 +115,7 @@ def _regroup(
     key_func: Callable[[Path], Hashable],
     stage: Stage,
     reporter: ProgressReporter,
-    errors: list[str],
+    errors: list[FileIssue],
 ) -> list[tuple[Hashable, list[Path]]]:
     """Split each group by ``key_func`` and keep only sub-groups of 2+ files.
 
@@ -132,7 +132,7 @@ def _regroup(
             try:
                 buckets[key_func(path)].append(path)
             except OSError as exc:
-                errors.append(f"{path}: {exc.strerror or exc}")
+                errors.append(FileIssue.from_os_error(path, exc))
             done += 1
             reporter.report(stage, done, total)
         result.extend((key, bucket) for key, bucket in buckets.items() if len(bucket) > 1)
@@ -146,7 +146,7 @@ def _stable_full_digest(path: Path) -> str:
     digest = full_digest(path)
     after = path.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-        raise FileChangedError(f"file changed while being scanned: {path}")
+        raise FileChangedError(IssueKind.CHANGED_DURING_SCAN)
     return digest
 
 

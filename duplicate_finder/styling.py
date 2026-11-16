@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Optional
 
-from .settings import Settings, SettingsStore
+from .settings import SettingsStore
 from .theme import Palette, ThemeMode, resolve_palette, system_prefers_dark
 
 SYSTEM_POLL_MS = 2000  # how often "system" mode re-checks the OS setting
@@ -51,7 +51,7 @@ class ThemeManager:
     def set_mode(self, mode: ThemeMode) -> None:
         self._mode = mode
         try:
-            self._store.save(Settings(theme_mode=mode))
+            self._store.update(theme_mode=mode)
         except OSError:
             pass  # an unsaved preference is not worth interrupting the user
         self._refresh()

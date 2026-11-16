@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from duplicate_finder.models import Selection
+from duplicate_finder.models import IssueKind, Selection
 from duplicate_finder.removal import MANIFEST_NAME, QuarantineRemover, remove_duplicates
 from duplicate_finder.scanner import find_duplicates
 
@@ -61,7 +61,7 @@ def test_group_is_skipped_when_keeper_changed(scan_dir):
     report = remove_duplicates([Selection(group, keep)], remover)
 
     assert remover.removed == []
-    assert len(report.failures) == 1
+    assert [(f.path, f.kind) for f in report.failures] == [(keep, IssueKind.KEEPER_CHANGED)]
 
 
 def test_group_is_skipped_when_keeper_deleted(scan_dir):
@@ -85,7 +85,8 @@ def test_changed_duplicate_is_not_removed(scan_dir):
 
     report = remove_duplicates([Selection(group, keep)], remover)
 
-    assert remover.removed == [] and len(report.failures) == 1
+    assert remover.removed == []
+    assert [(f.path, f.kind) for f in report.failures] == [(extra, IssueKind.CONTENT_CHANGED)]
 
 
 def test_user_chosen_keeper_is_respected(scan_dir):
@@ -106,9 +107,10 @@ def test_duplicate_hard_linked_to_keeper_after_scan_is_not_removed(scan_dir):
     os.link(keep, extra)
     remover = RecordingRemover()
 
-    remove_duplicates([Selection(group, keep)], remover)
+    report = remove_duplicates([Selection(group, keep)], remover)
 
     assert remover.removed == []
+    assert report.failures[0].kind is IssueKind.HARD_LINKED
 
 
 def test_quarantine_never_overwrites_existing_files(tmp_path, scan_dir):

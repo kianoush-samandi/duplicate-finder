@@ -20,7 +20,7 @@ from typing import Iterable, Optional, Protocol
 
 from .errors import FileChangedError
 from .hashing import full_digest
-from .models import DuplicateGroup, RemovalReport, Selection
+from .models import DuplicateGroup, FileIssue, IssueKind, RemovalReport, Selection
 from .progress import ProgressCallback, ProgressReporter, Stage
 
 MANIFEST_NAME = "manifest.jsonl"
@@ -112,14 +112,14 @@ def remove_duplicates(
     reporter = ProgressReporter(on_progress, cancel_event)
     total = sum(len(selection.files_to_remove) for selection in selections)
     removed: list[Path] = []
-    failures: list[str] = []
+    failures: list[FileIssue] = []
     done = 0
 
     for selection in selections:
         try:
             verify_unchanged(selection.keeper, selection.group)
-        except OSError as exc:
-            failures.append(f"{selection.keeper}: group skipped, kept copy changed ({exc})")
+        except OSError:
+            failures.append(FileIssue(selection.keeper, IssueKind.KEEPER_CHANGED))
             done += len(selection.files_to_remove)
             continue
 
@@ -128,11 +128,13 @@ def remove_duplicates(
             try:
                 verify_unchanged(path, selection.group)
                 if os.path.samefile(path, selection.keeper):
-                    raise FileChangedError("now a hard link to the kept copy")
+                    raise FileChangedError(IssueKind.HARD_LINKED)
                 remover.remove(path)
                 removed.append(path)
-            except (OSError, ValueError) as exc:
-                failures.append(f"{path}: {exc}")
+            except OSError as exc:
+                failures.append(FileIssue.from_os_error(path, exc))
+            except ValueError as exc:  # e.g. a path outside the quarantine's scan root
+                failures.append(FileIssue(path, IssueKind.ACCESS_ERROR, str(exc)))
             done += 1
             reporter.report(Stage.REMOVING, done, total)
 
@@ -142,11 +144,11 @@ def remove_duplicates(
 def verify_unchanged(path: Path, group: DuplicateGroup) -> None:
     """Raise ``FileChangedError`` unless ``path`` still matches the scan."""
     if path.is_symlink() or not path.is_file():
-        raise FileChangedError("missing, or no longer a regular file")
+        raise FileChangedError(IssueKind.MISSING)
     if path.stat().st_size != group.size:
-        raise FileChangedError("size changed since the scan")
+        raise FileChangedError(IssueKind.SIZE_CHANGED)
     if full_digest(path) != group.digest:
-        raise FileChangedError("content changed since the scan")
+        raise FileChangedError(IssueKind.CONTENT_CHANGED)
 
 
 def _unique_path(path: Path) -> Path:

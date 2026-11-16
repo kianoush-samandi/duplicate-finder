@@ -3,7 +3,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+
+
+class IssueKind(Enum):
+    """Why a file could not be scanned or removed.
+
+    Core code reports a kind, never a sentence: wording (and its language)
+    is the presentation layer's job.
+    """
+
+    ACCESS_ERROR = "access_error"  # OS-level error; details in FileIssue.detail
+    CHANGED_DURING_SCAN = "changed_during_scan"
+    MISSING = "missing"
+    SIZE_CHANGED = "size_changed"
+    CONTENT_CHANGED = "content_changed"
+    HARD_LINKED = "hard_linked"
+    KEEPER_CHANGED = "keeper_changed"  # the whole group was skipped
+
+
+@dataclass(frozen=True)
+class FileIssue:
+    path: Path
+    kind: IssueKind
+    detail: str = ""  # untranslated OS message, only for ACCESS_ERROR
+
+    @classmethod
+    def from_os_error(cls, path: Path, exc: OSError) -> "FileIssue":
+        kind = getattr(exc, "kind", IssueKind.ACCESS_ERROR)
+        detail = "" if kind is not IssueKind.ACCESS_ERROR else (exc.strerror or str(exc))
+        return cls(Path(path), kind, detail)
 
 
 @dataclass(frozen=True)
@@ -25,7 +55,7 @@ class ScanResult:
     root: Path
     groups: tuple[DuplicateGroup, ...]
     total_files: int
-    errors: tuple[str, ...]
+    errors: tuple[FileIssue, ...]
 
     @property
     def reclaimable_bytes(self) -> int:
@@ -51,4 +81,4 @@ class Selection:
 @dataclass(frozen=True)
 class RemovalReport:
     removed: tuple[Path, ...]
-    failures: tuple[str, ...]
+    failures: tuple[FileIssue, ...]

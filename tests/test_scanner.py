@@ -67,7 +67,7 @@ def test_unreadable_folder_is_reported_not_swallowed(tmp_path, make_file):
         result = find_duplicates(tmp_path)
     finally:
         locked.chmod(0o755)
-    assert any("locked" in error for error in result.errors)
+    assert any(issue.path.name == "locked" for issue in result.errors)
 
 
 def test_groups_are_sorted_largest_first(tmp_path, make_file):
