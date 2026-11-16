@@ -42,7 +42,7 @@ def test_quarantine_moves_non_keepers_and_writes_manifest(tmp_path, scan_dir):
     quarantine = tmp_path / "quarantine"
     remover = QuarantineRemover(quarantine, scan_dir)
 
-    report = remove_duplicates([Selection(_single_group(scan_dir), keep)], remover)
+    report = remove_duplicates([Selection(_single_group(scan_dir), (keep,))], remover)
 
     assert report.removed == (extra,) and report.failures == ()
     assert keep.exists() and not extra.exists()
@@ -58,7 +58,7 @@ def test_group_is_skipped_when_keeper_changed(scan_dir):
     keep.write_bytes(b"PAYLOAD")  # same size, different content
     remover = RecordingRemover()
 
-    report = remove_duplicates([Selection(group, keep)], remover)
+    report = remove_duplicates([Selection(group, (keep,))], remover)
 
     assert remover.removed == []
     assert [(f.path, f.kind) for f in report.failures] == [(keep, IssueKind.KEEPER_CHANGED)]
@@ -71,7 +71,7 @@ def test_group_is_skipped_when_keeper_deleted(scan_dir):
     keep.unlink()
     remover = RecordingRemover()
 
-    remove_duplicates([Selection(group, keep)], remover)
+    remove_duplicates([Selection(group, (keep,))], remover)
 
     assert remover.removed == []
 
@@ -83,7 +83,7 @@ def test_changed_duplicate_is_not_removed(scan_dir):
     extra.write_bytes(b"PAYLOAD")
     remover = RecordingRemover()
 
-    report = remove_duplicates([Selection(group, keep)], remover)
+    report = remove_duplicates([Selection(group, (keep,))], remover)
 
     assert remover.removed == []
     assert [(f.path, f.kind) for f in report.failures] == [(extra, IssueKind.CONTENT_CHANGED)]
@@ -94,7 +94,7 @@ def test_user_chosen_keeper_is_respected(scan_dir):
     chosen = _write(scan_dir / "b.txt", b"payload")
     remover = RecordingRemover()
 
-    remove_duplicates([Selection(_single_group(scan_dir), chosen)], remover)
+    remove_duplicates([Selection(_single_group(scan_dir), (chosen,))], remover)
 
     assert remover.removed == [first]
 
@@ -107,7 +107,7 @@ def test_duplicate_hard_linked_to_keeper_after_scan_is_not_removed(scan_dir):
     os.link(keep, extra)
     remover = RecordingRemover()
 
-    report = remove_duplicates([Selection(group, keep)], remover)
+    report = remove_duplicates([Selection(group, (keep,))], remover)
 
     assert remover.removed == []
     assert report.failures[0].kind is IssueKind.HARD_LINKED
@@ -120,7 +120,7 @@ def test_quarantine_never_overwrites_existing_files(tmp_path, scan_dir):
     _write(quarantine / "b.txt", b"older quarantined file")
 
     remove_duplicates(
-        [Selection(_single_group(scan_dir), keep)], QuarantineRemover(quarantine, scan_dir)
+        [Selection(_single_group(scan_dir), (keep,))], QuarantineRemover(quarantine, scan_dir)
     )
 
     assert (quarantine / "b.txt").read_bytes() == b"older quarantined file"
@@ -138,4 +138,36 @@ def test_selection_rejects_keeper_outside_group(scan_dir, tmp_path):
     _write(scan_dir / "a.txt", b"payload")
     _write(scan_dir / "b.txt", b"payload")
     with pytest.raises(ValueError):
-        Selection(_single_group(scan_dir), tmp_path / "elsewhere.txt")
+        Selection(_single_group(scan_dir), (tmp_path / "elsewhere.txt",))
+
+
+def test_selection_requires_at_least_one_keeper(scan_dir):
+    _write(scan_dir / "a.txt", b"payload")
+    _write(scan_dir / "b.txt", b"payload")
+    with pytest.raises(ValueError):
+        Selection(_single_group(scan_dir), ())
+
+
+def test_several_kept_copies_are_all_left_in_place(scan_dir):
+    a = _write(scan_dir / "a.txt", b"payload")
+    b = _write(scan_dir / "b.txt", b"payload")
+    c = _write(scan_dir / "c.txt", b"payload")
+    remover = RecordingRemover()
+
+    remove_duplicates([Selection(_single_group(scan_dir), (a, c))], remover)
+
+    assert remover.removed == [b]
+
+
+def test_group_is_skipped_when_any_kept_copy_changed(scan_dir):
+    a = _write(scan_dir / "a.txt", b"payload")
+    _write(scan_dir / "b.txt", b"payload")
+    c = _write(scan_dir / "c.txt", b"payload")
+    group = _single_group(scan_dir)
+    c.write_bytes(b"PAYLOAD")
+    remover = RecordingRemover()
+
+    report = remove_duplicates([Selection(group, (a, c))], remover)
+
+    assert remover.removed == []
+    assert [(f.path, f.kind) for f in report.failures] == [(c, IssueKind.KEEPER_CHANGED)]

@@ -97,6 +97,21 @@ def style_text_widget(text: tk.Text) -> WidgetStyler:
     return apply
 
 
+def style_menu(menu: tk.Menu) -> WidgetStyler:
+    def apply(palette: Palette) -> None:
+        menu.configure(
+            background=palette.surface,
+            foreground=palette.text,
+            activebackground=palette.selection,
+            activeforeground=palette.selection_text,
+            disabledforeground=palette.disabled_text,
+            relief="flat",
+            borderwidth=1,
+        )
+
+    return apply
+
+
 def _configure_ttk(style: ttk.Style, p: Palette) -> None:
     style.configure(
         ".",

@@ -15,7 +15,7 @@ from typing import Callable, Optional
 
 from .app_icon import apply_app_icon, register_windows_app_id
 from .background import BackgroundTask
-from .file_opener import FileOpenError, is_launchable, open_file
+from .file_opener import FileOpenError, is_launchable, open_file, reveal_file
 from .formatting import format_size
 from .i18n import Language, Translator
 from .models import FileIssue, RemovalReport, ScanResult
@@ -24,13 +24,16 @@ from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
 from .review import ReviewPlan
 from .scanner import find_duplicates
 from .settings import SettingsStore, default_settings_path
-from .styling import ThemeManager, style_text_widget
+from .styling import ThemeManager, style_menu, style_text_widget
 from .theme import ThemeMode
 from .validation import FolderNotSelectedError, NotAFolderError, parse_scan_folder
 
 # A status line is stored as a function of the translator, so it can be
 # re-rendered in the new language after a switch.
 StatusMessage = Callable[[Translator], str]
+
+# (translation key, command, enabled); None stands for a separator.
+MenuEntry = Optional[tuple[str, Callable[[], None], bool]]
 
 _PATH_COLUMN = "path"
 _LINK_HOVER_TAG = "path-link-hover"
@@ -208,6 +211,7 @@ class DuplicateFinderApp:
         self.tree.bind("<<TreeviewSelect>>", lambda _event: self._update_controls())
         self.tree.bind("<Double-1>", self._on_tree_double_click)
         self._bind_path_links()
+        self._bind_file_menu()
 
     # A ttk.Treeview cannot style a single cell, so the path "link" is a row
     # tag (accent color + underline) applied while the pointer is over the
@@ -269,14 +273,75 @@ class DuplicateFinderApp:
             icon="warning",
         ):
             return
+        self._hand_to_os(open_file, path)
+
+    def _reveal_path(self, path: Path) -> None:
+        self._hand_to_os(reveal_file, path)
+
+    def _hand_to_os(self, action: Callable[[Path], None], path: Path) -> None:
+        t = self._t
         try:
-            open_file(path)
+            action(path)
         except FileNotFoundError:
             messagebox.showerror(t("error.open_failed.title"),
                                  t("error.open_missing.body", path=path))
         except FileOpenError as exc:
             messagebox.showerror(t("error.open_failed.title"),
                                  t("error.open_failed.body", path=path, detail=exc))
+
+    # ------------------------------------------------------------ file menu
+
+    def _bind_file_menu(self) -> None:
+        self._file_menu = tk.Menu(self.tree, tearoff=False)
+        self._theme.style_widget(self._file_menu, style_menu(self._file_menu))
+        for sequence in _context_menu_sequences(self.root):
+            self.tree.bind(sequence, self._on_tree_context_menu)
+        self.tree.bind("<Shift-F10>", lambda _event: self._show_file_menu_at_selection())
+
+    def _on_tree_context_menu(self, event: tk.Event) -> None:
+        item = self.tree.identify_row(event.y)
+        if self._item_targets.get(item, (None, None))[1] is not None:
+            self._show_file_menu(item, event.x_root, event.y_root)
+
+    def _show_file_menu_at_selection(self) -> None:
+        selection = self.tree.selection()
+        if not selection or self._item_targets.get(selection[0], (None, None))[1] is None:
+            return
+        x, y, _width, height = self.tree.bbox(selection[0], _PATH_COLUMN) or (0, 0, 0, 0)
+        self._show_file_menu(selection[0], self.tree.winfo_rootx() + x,
+                             self.tree.winfo_rooty() + y + height)
+
+    def _show_file_menu(self, item: str, x_root: int, y_root: int) -> None:
+        self.tree.selection_set(item)  # menu actions work on the selected file
+        self.tree.focus(item)
+        self._file_menu.delete(0, "end")
+        for entry in self._file_menu_entries(*self._item_targets[item]):
+            if entry is None:
+                self._file_menu.add_separator()
+            else:
+                key, command, enabled = entry
+                self._file_menu.add_command(label=self._t(key), command=command,
+                                            state=_state(enabled))
+        try:
+            self._file_menu.tk_popup(x_root, y_root)
+        finally:
+            self._file_menu.grab_release()
+
+    def _file_menu_entries(self, group_index: int, path: Path) -> list[MenuEntry]:
+        plan, idle = self._plan, not self._busy
+        kept = plan.is_kept(group_index, path)
+        return [
+            ("menu.open", lambda: self._open_path(path), idle),
+            ("menu.show_in_folder", lambda: self._reveal_path(path), True),
+            None,
+            ("menu.keep", lambda: self._change_selected_file(ReviewPlan.keep),
+             idle and not kept),
+            ("menu.remove", lambda: self._change_selected_file(ReviewPlan.mark_for_removal),
+             idle and kept and plan.can_mark_for_removal(group_index, path)),
+            None,
+            ("menu.delete", lambda: self._delete_now(group_index, path),
+             idle and TrashRemover.is_available()),
+        ]
 
     def _build_review_row(self, parent: ttk.Frame) -> None:
         t = self._t
@@ -418,7 +483,6 @@ class DuplicateFinderApp:
         t = self._t
         group = self._plan.groups[index]
         skipped = self._plan.is_skipped(index)
-        keeper = self._plan.keeper(index)
         group_id = self._group_item_ids[index]
         size = format_size(group.size)
 
@@ -426,7 +490,8 @@ class DuplicateFinderApp:
         if skipped:
             title += t("tree.group_skipped_suffix")
         reclaimable = "" if skipped else t(
-            "tree.group_reclaimable", size=format_size(group.reclaimable_bytes)
+            "tree.group_reclaimable",
+            size=format_size(self._plan.selection(index).reclaimable_bytes),
         )
         self.tree.item(group_id, text=title, values=(reclaimable, size, ""))
 
@@ -435,7 +500,7 @@ class DuplicateFinderApp:
             if skipped:
                 action = t("tree.unchanged")
             else:
-                action = t("tree.keep" if path == keeper else "tree.remove")
+                action = t("tree.keep" if self._plan.is_kept(index, path) else "tree.remove")
             self.tree.item(file_id, text=path.name, values=(action, size, str(path)))
 
     def _selected_target(self) -> tuple[Optional[int], Optional[Path]]:
@@ -445,10 +510,13 @@ class DuplicateFinderApp:
         return self._item_targets.get(selection[0], (None, None))
 
     def _keep_selected_file(self) -> None:
+        self._change_selected_file(ReviewPlan.keep_only)
+
+    def _change_selected_file(self, change: Callable[[ReviewPlan, int, Path], None]) -> None:
         group_index, path = self._selected_target()
-        if self._busy or group_index is None or path is None:
+        if self._busy or path is None:
             return
-        self._plan.set_keeper(group_index, path)
+        change(self._plan, group_index, path)
         self._render_group(group_index)
         self._update_controls()
 
@@ -492,6 +560,29 @@ class DuplicateFinderApp:
             on_success=self._on_removal_finished,
             failure_title_key="error.removal_failed.title",
         )
+
+    def _delete_now(self, group_index: int, path: Path) -> None:
+        t = self._t
+        if not messagebox.askyesno(t("confirm.delete_now.title"),
+                                   t("confirm.delete_now.body", path=path), icon="warning"):
+            return
+        selection = self._plan.single_removal(group_index, path)
+        self._run_task(
+            lambda report, cancel: remove_duplicates(
+                [selection], TrashRemover(), on_progress=report, cancel_event=cancel
+            ),
+            on_success=lambda report: self._on_delete_now_finished(group_index, path, report),
+            failure_title_key="error.removal_failed.title",
+        )
+
+    def _on_delete_now_finished(self, group_index: int, path: Path,
+                                report: RemovalReport) -> None:
+        if not report.removed:
+            self._show_issues("dialog.failures.title", report.failures)
+            return
+        self._plan.forget(group_index, path)
+        self._populate_tree()  # the group may be gone, which shifts the others
+        self._set_status(_message("status.deleted_one", path=path))
 
     def _on_removal_finished(self, report: RemovalReport) -> None:
         t = self._t
@@ -579,6 +670,13 @@ class DuplicateFinderApp:
 
 def _state(enabled: bool) -> str:
     return "normal" if enabled else "disabled"
+
+
+def _context_menu_sequences(root: tk.Misc) -> tuple[str, ...]:
+    """Right-click is Button-3 on Windows/Linux but Button-2 (or Ctrl+click) on macOS."""
+    if root.tk.call("tk", "windowingsystem") == "aqua":
+        return ("<Button-2>", "<Control-Button-1>")
+    return ("<Button-3>",)
 
 
 def main() -> None:

@@ -64,18 +64,25 @@ class ScanResult:
 
 @dataclass(frozen=True)
 class Selection:
-    """A group the user approved, together with the copy they chose to keep."""
+    """A group the user approved, together with the copies they chose to keep."""
 
     group: DuplicateGroup
-    keeper: Path
+    keepers: tuple[Path, ...]
 
     def __post_init__(self) -> None:
-        if self.keeper not in self.group.files:
-            raise ValueError(f"Keeper is not part of the group: {self.keeper}")
+        if not self.keepers:
+            raise ValueError("At least one copy of every group must be kept.")
+        for keeper in self.keepers:
+            if keeper not in self.group.files:
+                raise ValueError(f"Keeper is not part of the group: {keeper}")
 
     @property
     def files_to_remove(self) -> tuple[Path, ...]:
-        return tuple(path for path in self.group.files if path != self.keeper)
+        return tuple(path for path in self.group.files if path not in self.keepers)
+
+    @property
+    def reclaimable_bytes(self) -> int:
+        return self.group.size * len(self.files_to_remove)
 
 
 @dataclass(frozen=True)

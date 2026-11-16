@@ -4,7 +4,14 @@ from pathlib import Path
 import pytest
 
 from duplicate_finder import file_opener
-from duplicate_finder.file_opener import FileOpenError, is_launchable, open_command, open_file
+from duplicate_finder.file_opener import (
+    FileOpenError,
+    is_launchable,
+    open_command,
+    open_file,
+    reveal_command,
+    reveal_file,
+)
 
 
 @pytest.mark.parametrize("name", ["setup.exe", "RUN.BAT", "script.ps1", "install.sh"])
@@ -58,6 +65,30 @@ def test_launch_failure_becomes_file_open_error(make_file, monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", missing_opener)
     with pytest.raises(FileOpenError):
         open_file(path, platform="linux")
+
+
+def test_reveal_selects_the_file_where_the_os_allows_it():
+    path = Path("/data/a b.txt")
+    assert reveal_command(path, "darwin") == ["open", "-R", str(path)]
+    assert reveal_command(path, "linux") == ["xdg-open", str(path.parent)]
+    windows_path = Path(r"C:\data\a b.txt")
+    assert reveal_command(windows_path, "win32") == r'explorer /select,"C:\data\a b.txt"'
+
+
+def test_reveal_missing_file_is_reported_without_launching(tmp_path, monkeypatch):
+    monkeypatch.setattr(subprocess, "Popen", _fail_if_called)
+    with pytest.raises(FileNotFoundError):
+        reveal_file(tmp_path / "gone.txt", platform="darwin")
+
+
+def test_reveal_launches_the_file_manager(make_file, monkeypatch):
+    path = make_file("a.txt", b"x")
+    launched = []
+    monkeypatch.setattr(subprocess, "Popen", lambda args, **_kw: launched.append(args))
+
+    reveal_file(path, platform="darwin")
+
+    assert launched == [["open", "-R", str(path)]]
 
 
 def _fail_if_called(*_args, **_kwargs):

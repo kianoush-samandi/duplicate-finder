@@ -1,7 +1,7 @@
 """Removing approved duplicates, with re-verification before every change.
 
 Safety rules:
-  1. The copy being kept is verified first; if it changed or vanished,
+  1. Every copy being kept is verified first; if one changed or vanished,
      the whole group is skipped, so the last good copy is never lost.
   2. Each copy is re-verified (type, size, full content) right before removal.
   3. Nothing is deleted permanently: files go to a quarantine folder (with a
@@ -103,7 +103,7 @@ def remove_duplicates(
     on_progress: Optional[ProgressCallback] = None,
     cancel_event: Optional[threading.Event] = None,
 ) -> RemovalReport:
-    """Remove every non-keeper file of each approved group.
+    """Remove every file of each approved group that is not marked to keep.
 
     Per-file failures are collected rather than raised, so one locked file
     does not abort the batch. Raises ``OperationCancelled`` between files.
@@ -116,10 +116,9 @@ def remove_duplicates(
     done = 0
 
     for selection in selections:
-        try:
-            verify_unchanged(selection.keeper, selection.group)
-        except OSError:
-            failures.append(FileIssue(selection.keeper, IssueKind.KEEPER_CHANGED))
+        changed_keeper = _first_changed_keeper(selection)
+        if changed_keeper is not None:
+            failures.append(FileIssue(changed_keeper, IssueKind.KEEPER_CHANGED))
             done += len(selection.files_to_remove)
             continue
 
@@ -127,7 +126,7 @@ def remove_duplicates(
             reporter.check_cancelled()
             try:
                 verify_unchanged(path, selection.group)
-                if os.path.samefile(path, selection.keeper):
+                if any(os.path.samefile(path, keeper) for keeper in selection.keepers):
                     raise FileChangedError(IssueKind.HARD_LINKED)
                 remover.remove(path)
                 removed.append(path)
@@ -139,6 +138,16 @@ def remove_duplicates(
             reporter.report(Stage.REMOVING, done, total)
 
     return RemovalReport(tuple(removed), tuple(failures))
+
+
+def _first_changed_keeper(selection: Selection) -> Optional[Path]:
+    """The first kept copy that no longer matches the scan, if any."""
+    for keeper in selection.keepers:
+        try:
+            verify_unchanged(keeper, selection.group)
+        except OSError:
+            return keeper
+    return None
 
 
 def verify_unchanged(path: Path, group: DuplicateGroup) -> None:

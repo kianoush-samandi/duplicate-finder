@@ -8,9 +8,13 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 ## Features
 
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
-- **You choose the copy to keep** in each group (double-click), and can **skip** any group.
+- **You choose the copies to keep** in each group (double-click keeps only that copy), and can
+  **skip** any group. At least one copy of every group is always kept.
 - **Check any copy before deciding:** click a file's path (or press Enter on a selected file) to
   open it in its default app. Programs and scripts ask for confirmation before they run.
+- **Right-click a file** (or Shift+F10) for: Open, Show in folder, Keep this copy, Mark for
+  removal, and Delete now — which moves just that copy to the Recycle Bin after verifying it
+  against another identical copy.
 - **Safe removal:**
   - The copy you keep is re-verified first; if it changed or disappeared, the whole group is left untouched.
   - Every duplicate is re-hashed right before it is moved.
@@ -87,7 +91,7 @@ duplicate_finder/
 ├── hashing.py       # partial_digest / full_digest
 ├── scanner.py       # find_duplicates — pure logic, no GUI, never modifies files
 ├── removal.py       # Remover strategies (Quarantine / Trash) + verified remove_duplicates
-├── review.py        # ReviewPlan — the user's choices (kept copy, skipped groups)
+├── review.py        # ReviewPlan — the user's choices (kept copies, skipped groups)
 ├── progress.py      # throttled progress reporting + cancellation, shared by all operations
 ├── background.py    # runs work off the Tk thread and hands results back safely
 ├── validation.py    # user-input validation (e.g. empty / invalid folder)
@@ -98,7 +102,7 @@ duplicate_finder/
 ├── styling.py       # ThemeManager — applies palettes to ttk, follows the OS setting
 ├── app_icon.py      # window/taskbar icon and the Windows taskbar ID
 ├── formatting.py    # format_size
-├── file_opener.py   # open a file with the OS default app — no Tk
+├── file_opener.py   # open a file / show it in its folder via the OS — no Tk
 └── gui.py           # presentation only (Tkinter)
 packaging/
 ├── installer.iss    # Inno Setup script

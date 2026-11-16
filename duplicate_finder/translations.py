@@ -35,6 +35,7 @@ ENGLISH = {
         "Reclaimable: {size}"
     ),
     "status.scan_errors_suffix": " | {count:,} errors / inaccessible",
+    "status.deleted_one": "Moved to the Recycle Bin: {path}",
     "status.progress_known": "{stage}: {done:,} of {total:,}",
     "status.progress_unknown": "{stage}: {done:,}",
 
@@ -54,9 +55,15 @@ ENGLISH = {
     "tree.remove": "✖ Remove",
     "tree.unchanged": "— Unchanged",
 
-    "review.keep": "Keep this copy (double-click)",
+    "review.keep": "Keep only this copy (double-click)",
     "review.toggle_skip": "Skip / include group",
     "review.summary": "{count:,} files to remove | Reclaimable: {size}",
+
+    "menu.open": "Open",
+    "menu.show_in_folder": "Show in folder",
+    "menu.keep": "Keep this copy",
+    "menu.remove": "Mark for removal",
+    "menu.delete": "Delete now (to Recycle Bin)…",
 
     "action.quarantine": "Move duplicates to quarantine…",
     "action.trash": "Move duplicates to Recycle Bin…",
@@ -93,6 +100,13 @@ ENGLISH = {
     "confirm.open_program.body": (
         "This file is a program or script, so opening it will run it:\n{path}\n\n"
         "Run it only if you trust it. Continue?"
+    ),
+
+    "confirm.delete_now.title": "Delete this file now?",
+    "confirm.delete_now.body": (
+        "This copy will be moved to the Recycle Bin right away:\n{path}\n\n"
+        "It is first compared again with another identical copy, which stays in place. "
+        "Continue?"
     ),
 
     "confirm.title": "Confirm removal",
@@ -146,6 +160,7 @@ PERSIAN = {
         "فضای قابل آزادسازی: {size}"
     ),
     "status.scan_errors_suffix": " | {count:,} خطا/عدم دسترسی",
+    "status.deleted_one": "به سطل بازیافت منتقل شد: {path}",
     "status.progress_known": "{stage}: {done:,} از {total:,}",
     "status.progress_unknown": "{stage}: {done:,}",
 
@@ -165,9 +180,15 @@ PERSIAN = {
     "tree.remove": "✖ حذف می‌شود",
     "tree.unchanged": "— بدون تغییر",
 
-    "review.keep": "نگه‌داشتن این نسخه (دابل‌کلیک)",
+    "review.keep": "فقط این نسخه نگه‌داشته شود (دابل‌کلیک)",
     "review.toggle_skip": "رد کردن / گنجاندن گروه",
     "review.summary": "{count:,} فایل برای حذف | فضای آزادشونده: {size}",
+
+    "menu.open": "باز کردن",
+    "menu.show_in_folder": "نمایش در پوشه",
+    "menu.keep": "نگه‌داشتن این نسخه",
+    "menu.remove": "علامت‌گذاری برای حذف",
+    "menu.delete": "حذف فوری (انتقال به سطل بازیافت)…",
 
     "action.quarantine": "انتقال تکراری‌ها به قرنطینه…",
     "action.trash": "انتقال تکراری‌ها به سطل بازیافت…",
@@ -204,6 +225,13 @@ PERSIAN = {
     "confirm.open_program.body": (
         "این فایل یک برنامه یا اسکریپت است و باز کردن آن یعنی اجرای آن:\n{path}\n\n"
         "فقط اگر به آن اطمینان دارید اجرایش کنید. ادامه می‌دهید؟"
+    ),
+
+    "confirm.delete_now.title": "این فایل همین حالا حذف شود؟",
+    "confirm.delete_now.body": (
+        "این نسخه بلافاصله به سطل بازیافت منتقل می‌شود:\n{path}\n\n"
+        "پیش از آن دوباره با یک نسخه‌ی یکسان دیگر مقایسه می‌شود که سر جایش می‌ماند. "
+        "ادامه می‌دهید؟"
     ),
 
     "confirm.title": "تأیید حذف",
