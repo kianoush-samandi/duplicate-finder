@@ -16,6 +16,7 @@ packaging/installer.iss, so none of them is written down twice.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import importlib.util
 import os
 import re
@@ -70,10 +71,29 @@ def check_build_environment() -> None:
 
 
 def read_version() -> str:
+    """The version in pyproject.toml, or the installed one if it is declared dynamic."""
+    project = _read_project_table()
+    if "version" in project:
+        return project["version"]
+    if "version" in project.get("dynamic", []):
+        return _installed_version(project["name"])
+    raise BuildError(f'{PYPROJECT} has no version. Add version = "1.0.0" under [project].')
+
+
+def _read_project_table() -> dict:
     try:
-        return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]["version"]
-    except (OSError, KeyError) as exc:
-        raise BuildError(f"Could not read [project].version from {PYPROJECT}: {exc}") from exc
+        return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as exc:
+        raise BuildError(f"Could not read the [project] table from {PYPROJECT}: {exc}") from exc
+
+
+def _installed_version(distribution: str) -> str:
+    """A dynamic version is computed by the build backend when the package is installed,
+    so it is read back from the installed metadata (refreshed by pip install -e .)."""
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise BuildError(f"{distribution} is not installed. Run: pip install -e .") from exc
 
 
 def numeric_version(version: str) -> str:
