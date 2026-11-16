@@ -15,6 +15,7 @@ from typing import Callable, Optional
 
 from .app_icon import apply_app_icon, register_windows_app_id
 from .background import BackgroundTask
+from .file_opener import FileOpenError, is_launchable, open_file
 from .formatting import format_size
 from .i18n import Language, Translator
 from .models import FileIssue, RemovalReport, ScanResult
@@ -30,6 +31,9 @@ from .validation import FolderNotSelectedError, NotAFolderError, parse_scan_fold
 # A status line is stored as a function of the translator, so it can be
 # re-rendered in the new language after a switch.
 StatusMessage = Callable[[Translator], str]
+
+_PATH_COLUMN = "path"
+_LINK_HOVER_TAG = "path-link-hover"
 
 
 def _message(key: str, **values) -> StatusMessage:
@@ -61,6 +65,7 @@ class DuplicateFinderApp:
         self._language_buttons: list[ttk.Radiobutton] = []
         self._group_item_ids: list[str] = []
         self._item_targets: dict[str, tuple[int, Optional[Path]]] = {}
+        self._hovered_link: Optional[str] = None
 
         self._rebuild()
 
@@ -179,13 +184,14 @@ class DuplicateFinderApp:
         frame.pack(fill="both", expand=True)
 
         self.tree = ttk.Treeview(
-            frame, columns=("action", "size", "path"), show="tree headings", selectmode="browse"
+            frame, columns=("action", "size", _PATH_COLUMN), show="tree headings",
+            selectmode="browse",
         )
         for column, key, width, anchor in (
             ("#0", "tree.heading.item", 260, self._anchor),
             ("action", "tree.heading.action", 190, self._anchor),
             ("size", "tree.heading.size", 100, "e"),
-            ("path", "tree.heading.path", 440, "w"),  # paths are always left-to-right
+            (_PATH_COLUMN, "tree.heading.path", 440, "w"),  # paths are always left-to-right
         ):
             self.tree.heading(column, text=t(key), anchor=anchor)
             self.tree.column(column, width=width, minwidth=80, anchor=anchor)
@@ -200,7 +206,77 @@ class DuplicateFinderApp:
         frame.columnconfigure(0, weight=1)
 
         self.tree.bind("<<TreeviewSelect>>", lambda _event: self._update_controls())
-        self.tree.bind("<Double-1>", lambda _event: self._keep_selected_file())
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self._bind_path_links()
+
+    # A ttk.Treeview cannot style a single cell, so the path "link" is a row
+    # tag (accent color + underline) applied while the pointer is over the
+    # path cell, plus a hand cursor. A click on that cell opens the file.
+
+    def _bind_path_links(self) -> None:
+        link_font = tkfont.nametofont("TkDefaultFont").copy()
+        link_font.configure(underline=True)
+        self._link_font = link_font  # Tk fonts vanish once garbage-collected
+        self._hovered_link = None
+        self._theme.style_widget(self.tree, lambda palette: self.tree.tag_configure(
+            _LINK_HOVER_TAG, foreground=palette.accent, font=link_font))
+
+        self.tree.bind("<Motion>", self._on_tree_motion)
+        self.tree.bind("<Leave>", lambda _event: self._set_hovered_link(None))
+        self.tree.bind("<Button-1>", self._on_tree_click)
+        self.tree.bind("<Return>", lambda _event: self._open_path(self._selected_target()[1]))
+
+    def _path_link_at(self, x: int, y: int) -> Optional[str]:
+        """The file row whose path cell is under (x, y), if any."""
+        if self.tree.identify_region(x, y) != "cell":
+            return None
+        if self.tree.column(self.tree.identify_column(x), "id") != _PATH_COLUMN:
+            return None
+        item = self.tree.identify_row(y)
+        _, path = self._item_targets.get(item, (None, None))
+        return item if path is not None else None
+
+    def _on_tree_motion(self, event: tk.Event) -> None:
+        self._set_hovered_link(self._path_link_at(event.x, event.y))
+
+    def _set_hovered_link(self, item: Optional[str]) -> None:
+        if item == self._hovered_link:
+            return
+        if self._hovered_link is not None and self.tree.exists(self._hovered_link):
+            self.tree.item(self._hovered_link, tags=())
+        if item is not None:
+            self.tree.item(item, tags=(_LINK_HOVER_TAG,))
+        self.tree.configure(cursor="hand2" if item is not None else "")
+        self._hovered_link = item
+
+    def _on_tree_click(self, event: tk.Event) -> None:
+        item = self._path_link_at(event.x, event.y)
+        if item is not None:
+            self._open_path(self._item_targets[item][1])
+
+    def _on_tree_double_click(self, event: tk.Event) -> None:
+        # The first click of a double-click on a path has already opened the
+        # file; choosing the keeper there as well would be a surprise.
+        if self._path_link_at(event.x, event.y) is None:
+            self._keep_selected_file()
+
+    def _open_path(self, path: Optional[Path]) -> None:
+        if path is None or self._busy:  # never lock a file that is being moved
+            return
+        t = self._t
+        if is_launchable(path) and not messagebox.askyesno(
+            t("confirm.open_program.title"), t("confirm.open_program.body", path=path),
+            icon="warning",
+        ):
+            return
+        try:
+            open_file(path)
+        except FileNotFoundError:
+            messagebox.showerror(t("error.open_failed.title"),
+                                 t("error.open_missing.body", path=path))
+        except FileOpenError as exc:
+            messagebox.showerror(t("error.open_failed.title"),
+                                 t("error.open_failed.body", path=path, detail=exc))
 
     def _build_review_row(self, parent: ttk.Frame) -> None:
         t = self._t
@@ -327,6 +403,7 @@ class DuplicateFinderApp:
         self.tree.delete(*self.tree.get_children())
         self._group_item_ids.clear()
         self._item_targets.clear()
+        self._set_hovered_link(None)
         if self._plan is None:
             return
         for index, group in enumerate(self._plan.groups):

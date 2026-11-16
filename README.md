@@ -9,6 +9,8 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
 - **You choose the copy to keep** in each group (double-click), and can **skip** any group.
+- **Check any copy before deciding:** click a file's path (or press Enter on a selected file) to
+  open it in its default app. Programs and scripts ask for confirmation before they run.
 - **Safe removal:**
   - The copy you keep is re-verified first; if it changed or disappeared, the whole group is left untouched.
   - Every duplicate is re-hashed right before it is moved.
@@ -96,6 +98,7 @@ duplicate_finder/
 ├── styling.py       # ThemeManager — applies palettes to ttk, follows the OS setting
 ├── app_icon.py      # window/taskbar icon and the Windows taskbar ID
 ├── formatting.py    # format_size
+├── file_opener.py   # open a file with the OS default app — no Tk
 └── gui.py           # presentation only (Tkinter)
 packaging/
 ├── installer.iss    # Inno Setup script

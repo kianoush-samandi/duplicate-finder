@@ -46,7 +46,7 @@ ENGLISH = {
     "tree.heading.item": "Group / File",
     "tree.heading.action": "Action",
     "tree.heading.size": "Size",
-    "tree.heading.path": "Path",
+    "tree.heading.path": "Path (click to open)",
     "tree.group": "Group {number} ({count} files)",
     "tree.group_skipped_suffix": " — skipped",
     "tree.group_reclaimable": "Frees {size}",
@@ -82,6 +82,18 @@ ENGLISH = {
     ),
     "error.scan_failed.title": "Scan error",
     "error.removal_failed.title": "Move error",
+
+    "error.open_failed.title": "Cannot open file",
+    "error.open_missing.body": (
+        "This file no longer exists at:\n{path}\n\nIt may have been moved or deleted "
+        "since the scan. Run the scan again to refresh the list."
+    ),
+    "error.open_failed.body": "The file could not be opened:\n{path}\n\n{detail}",
+    "confirm.open_program.title": "Run this program?",
+    "confirm.open_program.body": (
+        "This file is a program or script, so opening it will run it:\n{path}\n\n"
+        "Run it only if you trust it. Continue?"
+    ),
 
     "confirm.title": "Confirm removal",
     "confirm.lead.quarantine": "{count:,} duplicate files will be moved to:\n{folder}",
@@ -145,7 +157,7 @@ PERSIAN = {
     "tree.heading.item": "گروه / فایل",
     "tree.heading.action": "وضعیت",
     "tree.heading.size": "حجم",
-    "tree.heading.path": "مسیر",
+    "tree.heading.path": "مسیر (برای باز کردن کلیک کنید)",
     "tree.group": "گروه {number} ({count} فایل)",
     "tree.group_skipped_suffix": " — رد شده",
     "tree.group_reclaimable": "آزاد می‌شود: {size}",
@@ -181,6 +193,18 @@ PERSIAN = {
     ),
     "error.scan_failed.title": "خطا در اسکن",
     "error.removal_failed.title": "خطا در انتقال",
+
+    "error.open_failed.title": "باز کردن فایل ممکن نیست",
+    "error.open_missing.body": (
+        "این فایل دیگر در این مسیر وجود ندارد:\n{path}\n\nممکن است پس از اسکن جابه‌جا "
+        "یا حذف شده باشد. برای به‌روز شدن فهرست، دوباره اسکن کنید."
+    ),
+    "error.open_failed.body": "فایل باز نشد:\n{path}\n\n{detail}",
+    "confirm.open_program.title": "این برنامه اجرا شود؟",
+    "confirm.open_program.body": (
+        "این فایل یک برنامه یا اسکریپت است و باز کردن آن یعنی اجرای آن:\n{path}\n\n"
+        "فقط اگر به آن اطمینان دارید اجرایش کنید. ادامه می‌دهید؟"
+    ),
 
     "confirm.title": "تأیید حذف",
     "confirm.lead.quarantine": "{count:,} فایل تکراری به این پوشه منتقل می‌شوند:\n{folder}",
