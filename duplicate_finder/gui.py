@@ -13,6 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 from typing import Callable, Optional
 
+from .app_icon import apply_app_icon, register_windows_app_id
 from .background import BackgroundTask
 from .formatting import format_size
 from .i18n import Language, Translator
@@ -504,7 +505,9 @@ def _state(enabled: bool) -> str:
 
 
 def main() -> None:
+    register_windows_app_id()  # must precede the first window
     root = tk.Tk()
+    apply_app_icon(root)
     store = SettingsStore(default_settings_path())
     theme = ThemeManager(root, store)
     theme.start()

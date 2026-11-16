@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Simplified master for 16-32 px: thicker strokes, no inner details that would blur. -->
+  <rect x="8" y="8" width="496" height="496" rx="96" fill="#ffffff" stroke="#c8c8c8" stroke-width="16"/>
+  <rect x="92" y="76" width="216" height="268" rx="36" fill="#ffffff" stroke="#8a8a8a" stroke-width="40"/>
+  <rect x="168" y="152" width="216" height="268" rx="36" fill="#ffffff" stroke="#1b1b1b" stroke-width="40"/>
+  <line x1="400" y1="404" x2="448" y2="452" stroke="#0067c0" stroke-width="56" stroke-linecap="round"/>
+  <circle cx="348" cy="352" r="72" fill="#ffffff" stroke="#0067c0" stroke-width="44"/>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Duplicate Finder app icon (outline style), detailed master for 48 px and up. -->
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="#ffffff" stroke="#dcdcdc" stroke-width="4"/>
+  <g transform="translate(-12 -8)">
+    <rect x="120" y="92" width="200" height="256" rx="30" fill="#ffffff" stroke="#8a8a8a" stroke-width="20"/>
+    <rect x="180" y="150" width="200" height="256" rx="30" fill="#ffffff" stroke="#1b1b1b" stroke-width="20"/>
+    <line x1="226" y1="222" x2="334" y2="222" stroke="#1b1b1b" stroke-width="18" stroke-linecap="round"/>
+    <line x1="226" y1="262" x2="300" y2="262" stroke="#1b1b1b" stroke-width="18" stroke-linecap="round"/>
+    <line x1="396" y1="400" x2="440" y2="444" stroke="#0067c0" stroke-width="28" stroke-linecap="round"/>
+    <circle cx="348" cy="352" r="64" fill="#ffffff" stroke="#0067c0" stroke-width="22"/>
+    <line x1="324" y1="341" x2="372" y2="341" stroke="#0067c0" stroke-width="11" stroke-linecap="round"/>
+    <line x1="324" y1="363" x2="372" y2="363" stroke="#0067c0" stroke-width="11" stroke-linecap="round"/>
+  </g>
+</svg>
