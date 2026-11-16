@@ -15,8 +15,18 @@ from .progress import Stage
 from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
 from .review import ReviewPlan
 from .scanner import find_duplicates
+from .settings import SettingsStore, default_settings_path
+from .styling import ThemeManager, style_text_widget
+from .theme import ThemeMode
+from .validation import FolderNotSelectedError, NotAFolderError, parse_scan_folder
 
 APP_TITLE = "Duplicate Finder"
+
+THEME_LABELS = {
+    ThemeMode.SYSTEM: "پیش‌فرض ویندوز",
+    ThemeMode.LIGHT: "روشن",
+    ThemeMode.DARK: "تیره",
+}
 
 STAGE_LABELS = {
     Stage.COLLECTING: "در حال فهرست کردن فایل‌ها",
@@ -31,8 +41,9 @@ SKIPPED_LABEL = "— بدون تغییر"
 
 
 class DuplicateFinderApp:
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, theme: ThemeManager) -> None:
         self.root = root
+        self._theme = theme
         self.root.title(APP_TITLE)
         self.root.geometry("980x680")
         self.root.minsize(780, 520)
@@ -53,12 +64,7 @@ class DuplicateFinderApp:
         main = ttk.Frame(self.root, padding=12)
         main.pack(fill="both", expand=True)
 
-        title_font = tkfont.nametofont("TkDefaultFont").copy()
-        title_font.configure(size=16, weight="bold")
-        ttk.Label(main, text="پیدا کردن فایل‌های تکراری", font=title_font).pack(
-            anchor="w", pady=(0, 10)
-        )
-
+        self._build_header(main)
         self._build_folder_row(main)
         self._build_scan_row(main)
 
@@ -79,8 +85,30 @@ class DuplicateFinderApp:
                 "مستقیماً پاک نمی‌شوند: به قرنطینه (با فهرست بازگردانی) یا سطل بازیافت می‌روند."
             ),
             wraplength=940,
-            foreground="gray30",
+            style="Hint.TLabel",
         ).pack(anchor="w", pady=(8, 0))
+
+    def _build_header(self, parent: ttk.Frame) -> None:
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=(0, 10))
+
+        title_font = tkfont.nametofont("TkDefaultFont").copy()
+        title_font.configure(size=16, weight="bold")
+        ttk.Label(row, text="پیدا کردن فایل‌های تکراری", font=title_font).pack(side="left")
+
+        self.theme_var = tk.StringVar(value=self._theme.mode.value)
+        for mode in reversed(ThemeMode):  # packed right-to-left
+            ttk.Radiobutton(
+                row,
+                text=THEME_LABELS[mode],
+                value=mode.value,
+                variable=self.theme_var,
+                command=self._on_theme_selected,
+            ).pack(side="right", padx=(8, 0))
+        ttk.Label(row, text="تم:").pack(side="right")
+
+    def _on_theme_selected(self) -> None:
+        self._theme.set_mode(ThemeMode(self.theme_var.get()))
 
     def _build_folder_row(self, parent: ttk.Frame) -> None:
         row = ttk.Frame(parent)
@@ -200,11 +228,22 @@ class DuplicateFinderApp:
             self._task.cancel()
             self.status_var.set("در حال لغو…")
             return
-        folder = Path(self.folder_var.get().strip())
-        if not folder.is_dir():
-            messagebox.showerror("مسیر نامعتبر", "لطفاً یک پوشه معتبر انتخاب کنید.")
+        try:
+            folder = parse_scan_folder(self.folder_var.get())
+        except FolderNotSelectedError:
+            messagebox.showerror(
+                "پوشه‌ای انتخاب نشده",
+                "هنوز پوشه‌ای انتخاب نکرده‌اید.\n"
+                "لطفاً با دکمه‌ی «انتخاب پوشه» پوشه‌ای را که می‌خواهید بررسی شود انتخاب کنید.",
+            )
             return
-        self._start_scan(folder.resolve())
+        except NotAFolderError:
+            messagebox.showerror(
+                "مسیر نامعتبر",
+                "مسیر واردشده وجود ندارد یا یک پوشه نیست.\nلطفاً یک پوشه‌ی معتبر انتخاب کنید.",
+            )
+            return
+        self._start_scan(folder)
 
     def _start_scan(self, root: Path) -> None:
         self._set_results(None)
@@ -228,7 +267,7 @@ class DuplicateFinderApp:
 
     def _show_scan_errors(self) -> None:
         if self._scan_result:
-            _show_text_dialog(self.root, "خطاهای اسکن", self._scan_result.errors)
+            self._show_text_dialog("خطاهای اسکن", self._scan_result.errors)
 
     # ------------------------------------------------------------------ results
 
@@ -343,7 +382,7 @@ class DuplicateFinderApp:
             message += f"\n{len(report.failures):,} فایل منتقل نشد؛ جزئیات در پنجره‌ی بعدی."
         messagebox.showinfo("نتیجه", message)
         if report.failures:
-            _show_text_dialog(self.root, "فایل‌هایی که منتقل نشدند", report.failures)
+            self._show_text_dialog("فایل‌هایی که منتقل نشدند", report.failures)
         self._start_scan(self._scan_result.root)  # refresh with the same root
 
     # ---------------------------------------------------------- task plumbing
@@ -389,34 +428,35 @@ class DuplicateFinderApp:
             self.status_var.set(f"{label}: {done:,}")
 
 
+    def _show_text_dialog(self, title: str, lines) -> None:
+        """Read-only scrollable list; used for both scan errors and removal failures."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.geometry("760x380")
+        dialog.transient(self.root)
+        self._theme.style_window(dialog)
+
+        text = tk.Text(dialog, wrap="none", relief="flat", highlightthickness=1)
+        self._theme.style_widget(text, style_text_widget(text))
+        yscroll = ttk.Scrollbar(dialog, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=yscroll.set)
+        text.insert("1.0", "\n".join(lines))
+        text.configure(state="disabled")
+
+        ttk.Button(dialog, text="بستن", command=dialog.destroy).pack(side="bottom", pady=6)
+        yscroll.pack(side="right", fill="y")
+        text.pack(fill="both", expand=True)
+
+
 def _state(enabled: bool) -> str:
     return "normal" if enabled else "disabled"
 
 
-def _show_text_dialog(parent: tk.Misc, title: str, lines) -> None:
-    """Read-only scrollable list; used for both scan errors and removal failures."""
-    dialog = tk.Toplevel(parent)
-    dialog.title(title)
-    dialog.geometry("760x380")
-    dialog.transient(parent)
-
-    text = tk.Text(dialog, wrap="none")
-    yscroll = ttk.Scrollbar(dialog, orient="vertical", command=text.yview)
-    text.configure(yscrollcommand=yscroll.set)
-    text.insert("1.0", "\n".join(lines))
-    text.configure(state="disabled")
-
-    ttk.Button(dialog, text="بستن", command=dialog.destroy).pack(side="bottom", pady=6)
-    yscroll.pack(side="right", fill="y")
-    text.pack(fill="both", expand=True)
-
-
 def main() -> None:
     root = tk.Tk()
-    style = ttk.Style()
-    if "vista" in style.theme_names():  # native look on Windows; defaults elsewhere
-        style.theme_use("vista")
-    DuplicateFinderApp(root)
+    theme = ThemeManager(root, SettingsStore(default_settings_path()))
+    theme.start()
+    DuplicateFinderApp(root, theme)
     root.mainloop()
 
 
