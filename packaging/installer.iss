@@ -67,7 +67,6 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 
 DefaultDirName={autopf}\{#AppName}
-DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 
@@ -82,7 +81,9 @@ UninstallDisplayName={#AppName}
 ShowLanguageDialog=auto
 
 OutputDir={#OutputDir}
-OutputBaseFilename=DuplicateFinder-{#AppVersion}-Setup
+; No version in the name: the README links to releases/latest/download/<this
+; name>, which only stays valid if every release uses the same file name.
+OutputBaseFilename=DuplicateFinder-Setup
 Compression=lzma2/max
 SolidCompression=yes
 
@@ -95,14 +96,23 @@ Name: "fa"; MessagesFile: "languages\Farsi.isl"
 [CustomMessages]
 en.RemoveSettingsPrompt=Also remove your {#AppName} settings (theme and language)?%n%nFiles in your quarantine folders are not affected.
 fa.RemoveSettingsPrompt=تنظیمات {#AppName} (پوسته و زبان) هم حذف شود؟%n%nفایل‌های داخل پوشه‌های قرنطینه دست نمی‌خورند.
+; Inno Setup ships a message for the desktop shortcut but not for this one.
+en.CreateStartMenuIcon=Create a &Start menu shortcut
+fa.CreateStartMenuIcon=ایجاد میانبر در &منوی استارت
 
 [Tasks]
+; The Start menu shortcut is how most users find the app, so it is on by default.
+Name: "startmenuicon"; Description: "{cm:CreateStartMenuIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
 ; PyInstaller's support folder changes between versions; clear it on upgrade
 ; so no stale DLLs or modules from the previous version are left behind.
 Type: filesandordirs; Name: "{app}\_internal"
+; Shortcuts from a previous install stay unless removed here, so unticking a
+; shortcut task during an upgrade actually removes that shortcut.
+Type: files; Name: "{autoprograms}\{#AppName}.lnk"; Tasks: not startmenuicon
+Type: files; Name: "{autodesktop}\{#AppName}.lnk"; Tasks: not desktopicon
 
 [Files]
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -110,7 +120,7 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 ; AppUserModelID must match the one the app registers at startup, so a
 ; pinned taskbar icon and the running window are treated as one app.
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelID: "{#AppUserModelID}"
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelID: "{#AppUserModelID}"; Tasks: startmenuicon
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
 
 [Run]

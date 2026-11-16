@@ -21,13 +21,19 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 
 Theme and language choices are saved to `%APPDATA%\DuplicateFinder\settings.json` (Windows) or `~/.config/DuplicateFinder/settings.json`.
 
-## Install & run
+## Download
 
-On Windows, the easiest way is the installer (`DuplicateFinder-<version>-Setup.exe`); it needs no Python.
-To run from source instead (Python 3.9+):
+**Windows 10/11 (64-bit):** [⬇ Download DuplicateFinder-Setup.exe](https://github.com/kianoush-samandi/duplicate-finder/releases/latest/download/DuplicateFinder-Setup.exe)
+
+The link always points to the latest release; no Python needed. Older versions and release
+notes are on the [Releases page](https://github.com/kianoush-samandi/duplicate-finder/releases).
+
+## Run from source
+
+Python 3.9+:
 
 ```bash
-git clone https://github.com/<USERNAME>/duplicate-finder.git
+git clone https://github.com/kianoush-samandi/duplicate-finder.git
 cd duplicate-finder
 python -m venv .venv
 # Windows: .venv\Scripts\activate    |  Linux/macOS: source .venv/bin/activate
@@ -50,14 +56,22 @@ python tools/build_icons.py          # only if duplicate_finder/assets/icon.ico 
 python tools/build_installer.py      # add --iscc PATH if ISCC.exe is not found automatically
 ```
 
-The result is `dist/installer/DuplicateFinder-<version>-Setup.exe`. The version comes from
-`pyproject.toml`.
+The result is `dist/installer/DuplicateFinder-Setup.exe`. The version comes from
+`duplicate_finder.__version__`; it is shown in the installer and in the file's properties.
+The file name has no version on purpose, so the download link above never needs updating.
+
+To publish it, create a release whose tag matches the version and attach the installer
+(the [GitHub CLI](https://cli.github.com/) is shown; the Releases page works too):
+
+```bash
+gh release create v0.4.0 dist/installer/DuplicateFinder-Setup.exe --generate-notes
+```
 
 What the installer does:
 
 - Installs **per user** by default (no administrator prompt); "all users" can still be chosen.
 - English and Persian wizards, chosen from the Windows language; light/dark follows Windows.
-- Start-menu shortcut (optional desktop shortcut) with the same taskbar ID as the app, so a pinned icon and the running window stay one taskbar button.
+- Optional Start-menu shortcut (on by default) and desktop shortcut (off by default), both with the same taskbar ID as the app, so a pinned icon and the running window stay one taskbar button.
 - Upgrades in place and closes a running copy first; on uninstall it asks whether to remove your settings. Quarantine folders are never touched.
 
 Do not compile `packaging/installer.iss` on its own: `tools/build_installer.py` passes it the
@@ -128,7 +142,7 @@ pytest
 
 ابزاری برای پیدا کردن فایل‌های تکراری و حذف امن نسخه‌های اضافه، فقط پس از تأیید کاربر. زبان پیش‌فرض انگلیسی است و از بالای پنجره (بخش **Language**) می‌توانید زبان را به **فارسی** تغییر دهید. انتخاب شما ذخیره می‌شود و نتایج اسکن هنگام تغییر زبان از بین نمی‌رود.
 
-روی ویندوز ساده‌ترین راه نصب، فایل `DuplicateFinder-<version>-Setup.exe` است که به پایتون نیاز ندارد. برای ساختن آن، بخش «Building the Windows installer» را ببینید.
+**دانلود برای ویندوز ۱۰ و ۱۱ (۶۴ بیتی):** [⬇ دریافت DuplicateFinder-Setup.exe](https://github.com/kianoush-samandi/duplicate-finder/releases/latest/download/DuplicateFinder-Setup.exe) — همیشه آخرین نسخه را دانلود می‌کند و به پایتون نیازی ندارد. برای ساختن نصب‌کننده، بخش «Building the Windows installer» را ببینید.
 
 نکته: روی لینوکس، Tk حروف فارسی را برعکس نمایش می‌دهد؛ روی ویندوز و macOS نمایش درست است.
 
