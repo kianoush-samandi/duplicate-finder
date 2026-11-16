@@ -12,7 +12,9 @@ PNG_PATH = ASSETS_DIR / "icon.png"  # for platforms whose Tk cannot read .ico
 
 # Without its own ID, Windows groups the app under python.exe and shows Python's icon
 # on the taskbar. Format: Company.Product.SubProduct.Version.
-_WINDOWS_APP_ID = "DuplicateFinder.DuplicateFinder.App.1"
+# Public because the installer gives its shortcuts the same ID (tools/build_installer.py);
+# otherwise a pinned shortcut and the running window appear as two taskbar buttons.
+WINDOWS_APP_ID = "DuplicateFinder.DuplicateFinder.App.1"
 
 
 def register_windows_app_id() -> None:
@@ -22,7 +24,7 @@ def register_windows_app_id() -> None:
     try:
         import ctypes
 
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(_WINDOWS_APP_ID)
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_ID)
     except (AttributeError, OSError):
         pass  # very old Windows: the taskbar falls back to python.exe's icon
 

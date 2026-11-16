@@ -23,7 +23,8 @@ Theme and language choices are saved to `%APPDATA%\DuplicateFinder\settings.json
 
 ## Install & run
 
-Requires Python 3.9+.
+On Windows, the easiest way is the installer (`DuplicateFinder-<version>-Setup.exe`); it needs no Python.
+To run from source instead (Python 3.9+):
 
 ```bash
 git clone https://github.com/<USERNAME>/duplicate-finder.git
@@ -35,6 +36,32 @@ python -m duplicate_finder
 ```
 
 On Linux, Tkinter is a separate package: `sudo apt install python3-tk`.
+
+## Building the Windows installer
+
+The installer is built in two steps by one command: PyInstaller bundles the app with its own
+Python runtime (so users do not need Python), then Inno Setup packages that folder.
+
+Requirements: 64-bit Windows, 64-bit Python, and [Inno Setup 7.1+](https://jrsoftware.org/isdl.php).
+
+```bash
+pip install -e ".[trash]" pyinstaller
+python tools/build_icons.py          # only if duplicate_finder/assets/icon.ico is missing
+python tools/build_installer.py      # add --iscc PATH if ISCC.exe is not found automatically
+```
+
+The result is `dist/installer/DuplicateFinder-<version>-Setup.exe`. The version comes from
+`pyproject.toml`.
+
+What the installer does:
+
+- Installs **per user** by default (no administrator prompt); "all users" can still be chosen.
+- English and Persian wizards, chosen from the Windows language; light/dark follows Windows.
+- Start-menu shortcut (optional desktop shortcut) with the same taskbar ID as the app, so a pinned icon and the running window stay one taskbar button.
+- Upgrades in place and closes a running copy first; on uninstall it asks whether to remove your settings. Quarantine folders are never touched.
+
+Do not compile `packaging/installer.iss` on its own: `tools/build_installer.py` passes it the
+version, paths and IDs taken from the app's code, so each is defined in one place only.
 
 ## Project structure
 
@@ -53,8 +80,16 @@ duplicate_finder/
 ├── theme.py         # ThemeMode, palettes, Windows dark-mode detection — no Tk
 ├── settings.py      # persisted preferences (JSON)
 ├── styling.py       # ThemeManager — applies palettes to ttk, follows the OS setting
+├── app_icon.py      # window/taskbar icon and the Windows taskbar ID
 ├── formatting.py    # format_size
 └── gui.py           # presentation only (Tkinter)
+packaging/
+├── installer.iss    # Inno Setup script
+├── launcher.py      # PyInstaller entry point
+└── languages/Farsi.isl  # Persian installer text (from the Inno Setup project)
+tools/
+├── build_icons.py      # SVG masters → icon.ico / icon.png
+└── build_installer.py  # PyInstaller + Inno Setup → Setup.exe
 ```
 
 The core (`scanner`, `removal`, `review`) has no Tkinter dependency and reports problems as
@@ -66,6 +101,7 @@ message shown to the user can be translated.
 1. Add a member to `Language` in `i18n.py` (plus its native name, and add it to `_RTL_LANGUAGES` if it is right-to-left).
 2. Add a catalog to `translations.py` and register it in `CATALOGS`.
 3. Run `pytest` — the tests fail if any key or placeholder is missing.
+4. For the installer, add the language to `[Languages]` and `[CustomMessages]` in `packaging/installer.iss`.
 
 ## Restoring from quarantine
 
@@ -91,6 +127,8 @@ pytest
 ## فارسی
 
 ابزاری برای پیدا کردن فایل‌های تکراری و حذف امن نسخه‌های اضافه، فقط پس از تأیید کاربر. زبان پیش‌فرض انگلیسی است و از بالای پنجره (بخش **Language**) می‌توانید زبان را به **فارسی** تغییر دهید. انتخاب شما ذخیره می‌شود و نتایج اسکن هنگام تغییر زبان از بین نمی‌رود.
+
+روی ویندوز ساده‌ترین راه نصب، فایل `DuplicateFinder-<version>-Setup.exe` است که به پایتون نیاز ندارد. برای ساختن آن، بخش «Building the Windows installer» را ببینید.
 
 نکته: روی لینوکس، Tk حروف فارسی را برعکس نمایش می‌دهد؛ روی ویندوز و macOS نمایش درست است.
 
