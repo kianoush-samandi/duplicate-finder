@@ -1,3 +1,3 @@
 """Find duplicate files and remove extra copies safely, only after user approval."""
 
-__version__ = "1.5.1"
+__version__ = "1.6.0"

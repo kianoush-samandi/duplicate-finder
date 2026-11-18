@@ -44,6 +44,7 @@ MenuEntry = Optional[tuple[str, Callable[[], None], bool]]
 _PATH_COLUMN = "path"
 _LINK_HOVER_TAG = "path-link-hover"
 _RISKY_TAG = "risky"
+_INDETERMINATE_RANGE = 100  # ttk's default maximum; sets the busy animation's speed
 _MAX_LISTED_RISKY_FILES = 10  # more would not fit in a message box
 
 
@@ -847,7 +848,8 @@ class DuplicateFinderApp:
             def wrapped(*args) -> None:
                 self._task = None
                 self.progress.stop()
-                self.progress.configure(mode="determinate", value=0)
+                self.progress.configure(mode="determinate", maximum=_INDETERMINATE_RANGE,
+                                        value=0)
                 handler(*args)
                 self._update_controls()
 
@@ -876,7 +878,10 @@ class DuplicateFinderApp:
                                          done=done, total=total))
         else:
             if str(self.progress.cget("mode")) != "indeterminate":
-                self.progress.configure(mode="indeterminate")
+                # The moving block's speed depends on ``maximum``; a total left over
+                # from the previous run would make it crawl or look frozen.
+                self.progress.configure(mode="indeterminate", maximum=_INDETERMINATE_RANGE,
+                                        value=0)
                 self.progress.start(10)
             self._set_status(lambda t: t("status.progress_unknown",
                                          stage=t(f"stage.{stage.value}"), done=done))

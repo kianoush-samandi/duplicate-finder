@@ -103,6 +103,10 @@ def _collect_files_by_size(
         errors.append(FileIssue.from_os_error(exc.filename, exc))
 
     for path in _walk_files(roots, reporter, on_walk_error):
+        # Counts every file looked at, so progress keeps moving even when a
+        # filter or the size limit rejects most of them.
+        count += 1
+        reporter.report(Stage.COLLECTING, count)
         if file_filter is not None and not file_filter(path):
             continue  # checked first: it needs no disk access
         try:
@@ -122,8 +126,6 @@ def _collect_files_by_size(
         seen_inodes.add(inode)
 
         files_by_size[stat.st_size].append(path)
-        count += 1
-        reporter.report(Stage.COLLECTING, count)
 
     return files_by_size
 
