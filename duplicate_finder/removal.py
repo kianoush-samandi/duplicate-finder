@@ -42,29 +42,42 @@ def is_inside(child: Path, parent: Path) -> bool:
 
 
 class QuarantineRemover:
-    """Moves files into a folder, mirroring their layout below the scan root.
+    """Moves files into a folder, mirroring their layout below the scanned folders.
+
+    With one scanned folder, ``folder/sub/a.txt`` lands at ``quarantine/sub/a.txt``.
+    With several, each one's files go below a sub-folder named after it
+    (``quarantine/folder/sub/a.txt``), so copies from different folders stay apart.
 
     Every move is appended to ``manifest.jsonl`` immediately, so the record
     survives a crash halfway through and files can always be restored.
     """
 
-    def __init__(self, quarantine_dir: Path, scan_root: Path) -> None:
+    def __init__(self, quarantine_dir: Path, scan_roots: Iterable[Path]) -> None:
         self.quarantine_dir = Path(quarantine_dir).resolve()
-        self.scan_root = Path(scan_root).resolve()
-        if is_inside(self.quarantine_dir, self.scan_root):
-            raise ValueError("Quarantine folder must not be inside the scanned folder.")
-        if is_inside(self.scan_root, self.quarantine_dir):
-            raise ValueError("Quarantine folder must not contain the scanned folder.")
+        self.scan_roots = tuple(Path(root).resolve() for root in scan_roots)
+        for root in self.scan_roots:
+            if is_inside(self.quarantine_dir, root):
+                raise ValueError("Quarantine folder must not be inside a scanned folder.")
+            if is_inside(root, self.quarantine_dir):
+                raise ValueError("Quarantine folder must not contain a scanned folder.")
 
     @property
     def manifest_path(self) -> Path:
         return self.quarantine_dir / MANIFEST_NAME
 
     def remove(self, path: Path) -> None:
-        destination = _unique_path(self.quarantine_dir / path.relative_to(self.scan_root))
+        destination = _unique_path(self.quarantine_dir / self._mirrored_path(path))
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(path), str(destination))
         self._record(path, destination)
+
+    def _mirrored_path(self, path: Path) -> Path:
+        """``path`` relative to its scanned folder; raises ValueError if it has none."""
+        for root in self.scan_roots:
+            if is_inside(path, root):
+                relative = path.relative_to(root)
+                return relative if len(self.scan_roots) == 1 else Path(root.name) / relative
+        raise ValueError(f"{path} is not inside a scanned folder.")
 
     def _record(self, original: Path, destination: Path) -> None:
         entry = {

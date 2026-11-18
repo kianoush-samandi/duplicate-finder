@@ -8,13 +8,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Union
 
-# Extensions the OS would *run* rather than display. Clicking one of these in
-# a duplicate list is rarely meant as "execute it", so the GUI asks first.
-_LAUNCHABLE_SUFFIXES = frozenset({
-    ".app", ".bat", ".cmd", ".com", ".command", ".desktop", ".exe", ".hta", ".jar",
-    ".js", ".jse", ".lnk", ".msc", ".msi", ".pif", ".ps1", ".reg", ".scr", ".sh",
-    ".vbe", ".vbs", ".wsf", ".wsh",
-})
+from .risk import PROGRAM_SUFFIXES
 
 Command = Union[str, list[str]]
 
@@ -24,8 +18,11 @@ class FileOpenError(OSError):
 
 
 def is_launchable(path: Path) -> bool:
-    """True if opening ``path`` would run a program instead of showing a document."""
-    return path.suffix.lower() in _LAUNCHABLE_SUFFIXES
+    """True if opening ``path`` would run a program instead of showing a document.
+
+    Clicking one in a duplicate list is rarely meant as "execute it", so the GUI asks first.
+    """
+    return path.suffix.lower() in PROGRAM_SUFFIXES
 
 
 def open_file(path: Path, platform: str = sys.platform) -> None:

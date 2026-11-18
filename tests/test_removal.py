@@ -40,7 +40,7 @@ def test_quarantine_moves_non_keepers_and_writes_manifest(tmp_path, scan_dir):
     keep = _write(scan_dir / "a.txt", b"payload")
     extra = _write(scan_dir / "sub" / "b.txt", b"payload")
     quarantine = tmp_path / "quarantine"
-    remover = QuarantineRemover(quarantine, scan_dir)
+    remover = QuarantineRemover(quarantine, [scan_dir])
 
     report = remove_duplicates([Selection(_single_group(scan_dir), (keep,))], remover)
 
@@ -120,7 +120,7 @@ def test_quarantine_never_overwrites_existing_files(tmp_path, scan_dir):
     _write(quarantine / "b.txt", b"older quarantined file")
 
     remove_duplicates(
-        [Selection(_single_group(scan_dir), (keep,))], QuarantineRemover(quarantine, scan_dir)
+        [Selection(_single_group(scan_dir), (keep,))], QuarantineRemover(quarantine, [scan_dir])
     )
 
     assert (quarantine / "b.txt").read_bytes() == b"older quarantined file"
@@ -131,7 +131,7 @@ def test_quarantine_never_overwrites_existing_files(tmp_path, scan_dir):
 def test_quarantine_cannot_overlap_scan_root(tmp_path, scan_dir, relation):
     quarantine = scan_dir / "q" if relation == "inside" else tmp_path
     with pytest.raises(ValueError):
-        QuarantineRemover(quarantine, scan_dir)
+        QuarantineRemover(quarantine, [scan_dir])
 
 
 def test_selection_rejects_keeper_outside_group(scan_dir, tmp_path):
@@ -171,3 +171,24 @@ def test_group_is_skipped_when_any_kept_copy_changed(scan_dir):
 
     assert remover.removed == []
     assert [(f.path, f.kind) for f in report.failures] == [(c, IssueKind.KEEPER_CHANGED)]
+
+
+def test_quarantine_keeps_files_from_several_folders_apart(tmp_path):
+    first, second = tmp_path / "photos", tmp_path / "backup"
+    keep = _write(first / "a.jpg", b"payload")
+    extra = _write(second / "a.jpg", b"payload")
+    quarantine = tmp_path / "quarantine"
+    (group,) = find_duplicates(first, second).groups
+
+    remove_duplicates([Selection(group, (keep,))],
+                      QuarantineRemover(quarantine, [first, second]))
+
+    assert not extra.exists()
+    assert (quarantine / "backup" / "a.jpg").read_bytes() == b"payload"
+
+
+def test_quarantine_cannot_overlap_any_scanned_folder(tmp_path):
+    first, second = tmp_path / "one", tmp_path / "two"
+    first.mkdir(), second.mkdir()
+    with pytest.raises(ValueError):
+        QuarantineRemover(second / "q", [first, second])

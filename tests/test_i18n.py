@@ -2,9 +2,12 @@ import string
 
 import pytest
 
+from duplicate_finder.file_types import FileCategory
 from duplicate_finder.i18n import DEFAULT_LANGUAGE, Language, Translator
 from duplicate_finder.models import IssueKind
 from duplicate_finder.progress import Stage
+from duplicate_finder.result_order import SortField
+from duplicate_finder.risk import RiskReason
 from duplicate_finder.settings import Settings, SettingsStore
 from duplicate_finder.theme import ThemeMode
 from duplicate_finder.translations import CATALOGS
@@ -36,6 +39,9 @@ def test_every_issue_kind_and_stage_has_a_message():
     assert {f"issue.{kind.value}" for kind in IssueKind} <= keys
     assert {f"stage.{stage.value}" for stage in Stage} <= keys
     assert {f"theme.{mode.value}" for mode in ThemeMode} <= keys
+    assert {f"filetype.{category.value}" for category in FileCategory} <= keys
+    assert {f"sort.field.{field.value}" for field in SortField} <= keys
+    assert {f"risk.{reason.value}" for reason in RiskReason} <= keys
 
 
 def test_translator_formats_placeholders():

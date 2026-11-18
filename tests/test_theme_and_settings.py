@@ -4,6 +4,7 @@ import pytest
 
 from duplicate_finder.settings import Settings, SettingsStore
 from duplicate_finder.theme import (
+    ButtonRole,
     DARK_PALETTE,
     LIGHT_PALETTE,
     ThemeMode,
@@ -57,3 +58,37 @@ def test_corrupt_settings_fall_back_to_system(tmp_path, content):
 
 def test_missing_settings_default_to_system(tmp_path):
     assert SettingsStore(tmp_path / "none.json").load() == Settings()
+
+
+def _luminance(color: str) -> float:
+    channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(a: str, b: str) -> float:
+    light, dark = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+WCAG_AA = 4.5
+PALETTES = [LIGHT_PALETTE, DARK_PALETTE]
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+@pytest.mark.parametrize("role", list(ButtonRole))
+def test_button_text_is_readable_in_every_state(palette, role):
+    colors = palette.button_colors(role)
+    assert _contrast(colors.text, colors.background) >= WCAG_AA
+    assert _contrast(colors.text, colors.hover) >= WCAG_AA
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_button_roles_look_different(palette):
+    backgrounds = {palette.button_colors(role).background for role in ButtonRole}
+    assert len(backgrounds) == len(ButtonRole)
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_warning_text_is_readable(palette):
+    assert _contrast(palette.warning, palette.surface) >= WCAG_AA

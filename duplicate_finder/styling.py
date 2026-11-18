@@ -12,7 +12,7 @@ from tkinter import ttk
 from typing import Callable, Optional
 
 from .settings import SettingsStore
-from .theme import Palette, ThemeMode, resolve_palette, system_prefers_dark
+from .theme import ButtonColors, ButtonRole, Palette, ThemeMode, resolve_palette, system_prefers_dark
 
 SYSTEM_POLL_MS = 2000  # how often "system" mode re-checks the OS setting
 
@@ -82,6 +82,11 @@ class ThemeManager:
             styler(palette)
 
 
+def button_style(role: ButtonRole) -> str:
+    """The ttk style name for a button with ``role``."""
+    return "TButton" if role is ButtonRole.NEUTRAL else f"{role.value.title()}.TButton"
+
+
 def style_text_widget(text: tk.Text) -> WidgetStyler:
     def apply(palette: Palette) -> None:
         text.configure(
@@ -90,6 +95,21 @@ def style_text_widget(text: tk.Text) -> WidgetStyler:
             insertbackground=palette.text,
             selectbackground=palette.selection,
             selectforeground=palette.selection_text,
+            highlightbackground=palette.border,
+            highlightcolor=palette.accent,
+        )
+
+    return apply
+
+
+def style_listbox(listbox: tk.Listbox) -> WidgetStyler:
+    def apply(palette: Palette) -> None:
+        listbox.configure(
+            background=palette.surface,
+            foreground=palette.text,
+            selectbackground=palette.selection,
+            selectforeground=palette.selection_text,
+            disabledforeground=palette.disabled_text,
             highlightbackground=palette.border,
             highlightcolor=palette.accent,
         )
@@ -129,12 +149,9 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
     )
     style.map(".", foreground=[("disabled", p.disabled_text)])
 
-    style.configure("TButton", background=p.control, padding=(10, 4))
-    style.map(
-        "TButton",
-        background=[("disabled", p.background), ("pressed", p.control_hover),
-                    ("active", p.control_hover)],
-    )
+    style.configure("TButton", padding=(10, 4))
+    for role in ButtonRole:
+        _configure_button(style, button_style(role), p.button_colors(role), p)
 
     style.map(
         "TEntry",
@@ -142,12 +159,27 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
         bordercolor=[("focus", p.accent)],
     )
 
-    style.configure("TRadiobutton", indicatorbackground=p.surface, indicatorforeground=p.text)
+    for toggle in ("TRadiobutton", "TCheckbutton"):
+        style.configure(toggle, indicatorbackground=p.surface, indicatorforeground=p.text)
+        style.map(
+            toggle,
+            background=[("active", p.background)],
+            indicatorbackground=[("selected", p.accent), ("disabled", p.background)],
+        )
+
     style.map(
-        "TRadiobutton",
-        background=[("active", p.background)],
-        indicatorbackground=[("selected", p.accent)],
+        "TCombobox",
+        fieldbackground=[("disabled", p.background), ("readonly", p.surface)],
+        bordercolor=[("focus", p.accent)],
+        arrowcolor=[("disabled", p.disabled_text)],
     )
+    style.configure("TCombobox", arrowcolor=p.text, background=p.control)
+    # The drop-down list is a plain Tk listbox, reached only through the option database.
+    root = style.master
+    for option, value in (("background", p.surface), ("foreground", p.text),
+                          ("selectBackground", p.selection),
+                          ("selectForeground", p.selection_text)):
+        root.option_add(f"*TCombobox*Listbox.{option}", value)
 
     style.configure("Treeview", background=p.surface, fieldbackground=p.surface,
                     foreground=p.text)
@@ -166,6 +198,24 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
     style.map("TScrollbar", background=[("active", p.control_hover)])
 
     style.configure("Hint.TLabel", foreground=p.muted_text)
+
+
+def _configure_button(style: ttk.Style, name: str, colors: ButtonColors, p: Palette) -> None:
+    """One look for every role; only the colors differ.
+
+    A disabled button looks the same whatever its role, so a red button
+    always means "this removes files, and you can press it now".
+    """
+    style.configure(name, background=colors.background, foreground=colors.text)
+    style.map(
+        name,
+        background=[("disabled", p.background), ("pressed", colors.hover),
+                    ("active", colors.hover)],
+        foreground=[("disabled", p.disabled_text)],
+        bordercolor=[("disabled", p.border), ("!disabled", colors.border)],
+        lightcolor=[("disabled", p.background), ("!disabled", colors.background)],
+        darkcolor=[("disabled", p.background), ("!disabled", colors.background)],
+    )
 
 
 def _style_window(window: tk.Misc, palette: Palette) -> None:

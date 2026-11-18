@@ -4,6 +4,7 @@ import threading
 import pytest
 
 from duplicate_finder.errors import OperationCancelled
+from duplicate_finder.file_types import ExtensionFilter
 from duplicate_finder.hashing import PARTIAL_SIZE
 from duplicate_finder.scanner import find_duplicates
 
@@ -97,3 +98,44 @@ def test_cancellation_stops_the_scan(tmp_path, make_file):
 
     with pytest.raises(OperationCancelled):
         find_duplicates(tmp_path, cancel_event=cancel)
+
+
+def test_duplicates_are_matched_across_several_folders(tmp_path, make_file):
+    a = make_file("one/a.txt", b"shared")
+    b = make_file("two/b.txt", b"shared")
+
+    result = find_duplicates(tmp_path / "one", tmp_path / "two")
+
+    assert [set(group.files) for group in result.groups] == [{a, b}]
+    assert result.roots == ((tmp_path / "one").resolve(), (tmp_path / "two").resolve())
+
+
+def test_shared_only_drops_groups_inside_a_single_folder(tmp_path, make_file):
+    make_file("one/x1", b"only in one")
+    make_file("one/x2", b"only in one")
+    shared = {make_file("one/s", b"in both!!"), make_file("two/s", b"in both!!")}
+
+    result = find_duplicates(tmp_path / "one", tmp_path / "two", shared_only=True)
+
+    assert [set(group.files) for group in result.groups] == [shared]
+
+
+def test_overlapping_folders_do_not_report_a_file_twice(tmp_path, make_file):
+    make_file("sub/a", b"single")
+
+    assert find_duplicates(tmp_path, tmp_path / "sub").groups == ()
+
+
+def test_at_least_one_folder_is_required():
+    with pytest.raises(ValueError):
+        find_duplicates()
+
+
+def test_file_filter_limits_which_files_are_compared(tmp_path, make_file):
+    pdfs = {make_file("a.pdf", b"same"), make_file("b.PDF", b"same")}
+    make_file("c.txt", b"same")
+
+    result = find_duplicates(tmp_path, file_filter=ExtensionFilter(frozenset({".pdf"})))
+
+    assert [set(group.files) for group in result.groups] == [pdfs]
+    assert result.total_files == 2

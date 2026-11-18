@@ -7,6 +7,15 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 
 ## Features
 
+- **Several folders at once:** add as many folders as you like; duplicates are matched across
+  all of them. Tick *Only files shared between folders* to see just the files they have in common.
+- **Filter by file type:** tick *Only these file types* and pick a category (Documents, PDF,
+  Images, Videos, Audio, Archives) or type your own extensions, e.g. `pdf, docx`.
+- **Sort the results** by file size, name or type, ascending or descending.
+- **Warning before removing risky files:** programs, scripts, libraries and drivers (`.exe`,
+  `.dll`, `.sys`, `.bat`, `.ps1`, …), files in system or program folders (e.g. `C:\Windows`,
+  `Program Files`) and application data (`AppData`, `.git`, …) are listed together in their own
+  section, and removing any of them needs an extra confirmation that defaults to *No*.
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
 - **You choose the copies to keep** in each group (double-click keeps only that copy), and can
   **skip** any group. At least one copy of every group is always kept.
@@ -23,6 +32,9 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 - Scanning and removal run in the background — the window never freezes, and both can be **cancelled**.
 - Access errors are never hidden; they can be reviewed in a separate window.
 - **Themes:** Light, Dark, or *Windows default*, which follows Windows' app mode live.
+- **Buttons are colored by what they do,** in both themes: the main next step (*Start scan*) is
+  blue, actions that remove files are red, everything else is neutral. All button text meets
+  WCAG AA contrast (4.5:1), and disabled buttons look the same whatever their role.
 - **Languages:** English or Persian, switchable at any time without losing your results; the layout is mirrored for right-to-left.
 
 Theme and language choices are saved to `%APPDATA%\DuplicateFinder\settings.json` (Windows) or `~/.config/DuplicateFinder/settings.json`.
@@ -36,7 +48,7 @@ notes are on the [Releases page](https://github.com/kianoush-samandi/duplicate-f
 
 ## Run from source
 
-Python 3.9+:
+Python 3.10+:
 
 ```bash
 git clone https://github.com/kianoush-samandi/duplicate-finder.git
@@ -91,10 +103,14 @@ duplicate_finder/
 ├── hashing.py       # partial_digest / full_digest
 ├── scanner.py       # find_duplicates — pure logic, no GUI, never modifies files
 ├── removal.py       # Remover strategies (Quarantine / Trash) + verified remove_duplicates
+├── result_order.py  # SortField + ordered_group_indices — how groups are listed
+├── risk.py          # RiskAssessor — flags program, system and app-data files
 ├── review.py        # ReviewPlan — the user's choices (kept copies, skipped groups)
 ├── progress.py      # throttled progress reporting + cancellation, shared by all operations
 ├── background.py    # runs work off the Tk thread and hands results back safely
 ├── validation.py    # user-input validation (e.g. empty / invalid folder)
+├── file_types.py    # FileCategory presets, parse_extensions, ExtensionFilter
+├── scan_folders.py  # ScanFolders — the chosen folders, kept unique and non-overlapping
 ├── i18n.py          # Language, Translator (with English fallback)
 ├── translations.py  # message catalogs — data only
 ├── theme.py         # ThemeMode, palettes, Windows dark-mode detection — no Tk
@@ -125,6 +141,9 @@ message shown to the user can be translated.
 4. For the installer, add the language to `[Languages]` and `[CustomMessages]` in `packaging/installer.iss`.
 
 ## Restoring from quarantine
+
+With one scanned folder, files keep their layout below it; with several, each folder's files
+go below a sub-folder named after it.
 
 Each line of `manifest.jsonl` records one move:
 

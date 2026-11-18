@@ -7,7 +7,9 @@ so a rebuild loses nothing and the layout can be mirrored for RTL languages.
 
 from __future__ import annotations
 
+import threading
 import tkinter as tk
+from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
@@ -15,18 +17,22 @@ from typing import Callable, Optional
 
 from .app_icon import apply_app_icon, register_windows_app_id
 from .background import BackgroundTask
+from .file_types import ExtensionFilter, FileCategory, NoExtensionsError, parse_extensions
 from .file_opener import FileOpenError, is_launchable, open_file, reveal_file
 from .formatting import format_size
 from .i18n import Language, Translator
 from .models import FileIssue, RemovalReport, ScanResult
-from .progress import Stage
+from .progress import ProgressCallback, Stage
 from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
+from .result_order import SortField, ordered_group_indices
 from .review import ReviewPlan
+from .risk import RiskAssessor, RiskReason
+from .scan_folders import FolderAlreadyIncludedError, ScanFolders
 from .scanner import find_duplicates
 from .settings import SettingsStore, default_settings_path
-from .styling import ThemeManager, style_menu, style_text_widget
-from .theme import ThemeMode
-from .validation import FolderNotSelectedError, NotAFolderError, parse_scan_folder
+from .styling import ThemeManager, button_style, style_listbox, style_menu, style_text_widget
+from .theme import ButtonRole, ThemeMode
+from .validation import FolderNotSelectedError, NotAFolderError
 
 # A status line is stored as a function of the translator, so it can be
 # re-rendered in the new language after a switch.
@@ -37,27 +43,55 @@ MenuEntry = Optional[tuple[str, Callable[[], None], bool]]
 
 _PATH_COLUMN = "path"
 _LINK_HOVER_TAG = "path-link-hover"
+_RISKY_TAG = "risky"
+_MAX_LISTED_RISKY_FILES = 10  # more would not fit in a message box
 
 
 def _message(key: str, **values) -> StatusMessage:
     return lambda t: t(key, **values)
 
 
+@dataclass(frozen=True)
+class ScanRequest:
+    """What to scan and how; kept so the same scan can be repeated after a removal."""
+
+    roots: tuple[Path, ...]
+    file_filter: Optional[ExtensionFilter]
+    shared_only: bool
+
+    def run(self, report: ProgressCallback, cancel: threading.Event) -> ScanResult:
+        return find_duplicates(*self.roots, file_filter=self.file_filter,
+                               shared_only=self.shared_only,
+                               on_progress=report, cancel_event=cancel)
+
+
 class DuplicateFinderApp:
-    def __init__(self, root: tk.Tk, theme: ThemeManager, store: SettingsStore) -> None:
+    def __init__(self, root: tk.Tk, theme: ThemeManager, store: SettingsStore,
+                 risk: RiskAssessor) -> None:
         self.root = root
         self._theme = theme
         self._store = store
+        self._risk = risk
         self._t = Translator(store.load().language)
-        self.root.geometry("1000x680")
-        self.root.minsize(800, 520)
+        self.root.geometry("1040x760")
+        self.root.minsize(840, 600)
 
         # State that must survive a UI rebuild.
         self._task: Optional[BackgroundTask] = None
+        self._folders = ScanFolders()
+        self._scan_request: Optional[ScanRequest] = None
         self._scan_result: Optional[ScanResult] = None
         self._plan: Optional[ReviewPlan] = None
+        self._risky_files: dict[Path, frozenset[RiskReason]] = {}
         self._status: StatusMessage = _message("status.ready")
-        self.folder_var = tk.StringVar()
+        self.shared_only_var = tk.BooleanVar(value=False)
+        self.type_filter_var = tk.BooleanVar(value=False)
+        self.file_types_var = tk.StringVar()
+        # A ready-made category picked from the list, or None for typed extensions.
+        # Kept apart from the text so the label can be re-translated on a rebuild.
+        self._file_category: Optional[FileCategory] = FileCategory.DOCUMENTS
+        self._sort_field = SortField.SIZE
+        self._sort_descending = True
         self.status_var = tk.StringVar()
         self.plan_var = tk.StringVar()
         self.theme_var = tk.StringVar(value=theme.mode.value)
@@ -66,7 +100,8 @@ class DuplicateFinderApp:
         # Widget bookkeeping, recreated by every rebuild.
         self._main: Optional[ttk.Frame] = None
         self._language_buttons: list[ttk.Radiobutton] = []
-        self._group_item_ids: list[str] = []
+        self._group_item_ids: dict[int, str] = {}  # plan group index -> tree item
+        self._group_numbers: dict[int, int] = {}  # plan group index -> number shown
         self._item_targets: dict[str, tuple[int, Optional[Path]]] = {}
         self._hovered_link: Optional[str] = None
 
@@ -97,7 +132,7 @@ class DuplicateFinderApp:
 
     def _build_ui(self) -> None:
         t = self._t
-        rtl = t.language.is_rtl
+        self._rtl = rtl = t.language.is_rtl
         # Mirrored layout for right-to-left languages.
         self._start, self._end = ("right", "left") if rtl else ("left", "right")
         self._anchor = "e" if rtl else "w"
@@ -108,7 +143,8 @@ class DuplicateFinderApp:
         main.pack(fill="both", expand=True)
 
         self._build_header(main)
-        self._build_folder_row(main)
+        self._build_folder_list(main)
+        self._build_type_filter_row(main)
         self._build_scan_row(main)
 
         self.progress = ttk.Progressbar(main, mode="determinate")
@@ -117,6 +153,7 @@ class DuplicateFinderApp:
             anchor=self._anchor, pady=(0, 6)
         )
 
+        self._build_sort_row(main)
         self._build_tree(main)
         self._build_review_row(main)
         self._build_action_row(main)
@@ -152,6 +189,10 @@ class DuplicateFinderApp:
             self._radio(preferences, t(f"theme.{mode.value}"), mode.value,
                         self.theme_var, self._on_theme_selected)
 
+    def _start_gap(self, size: int) -> tuple[int, int]:
+        """Horizontal padding on the start side only (left in LTR, right in RTL)."""
+        return (0, size) if self._rtl else (size, 0)
+
     def _radio(self, parent, text, value, variable, command) -> ttk.Radiobutton:
         button = ttk.Radiobutton(parent, text=text, value=value, variable=variable,
                                  command=command)
@@ -161,16 +202,79 @@ class DuplicateFinderApp:
     def _on_theme_selected(self) -> None:
         self._theme.set_mode(ThemeMode(self.theme_var.get()))
 
-    def _build_folder_row(self, parent: ttk.Frame) -> None:
+    def _build_folder_list(self, parent: ttk.Frame) -> None:
+        t = self._t
+        ttk.Label(parent, text=t("folder.label")).pack(anchor=self._anchor)
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=(4, 0))
+
+        buttons = ttk.Frame(row)
+        buttons.pack(side=self._end, fill="y", padx=self._start_gap(8))
+        self.add_folder_button = ttk.Button(buttons, text=t("folder.add"),
+                                            command=self._add_folder)
+        self.add_folder_button.pack(fill="x")
+        self.remove_folder_button = ttk.Button(buttons, text=t("folder.remove"),
+                                               command=self._remove_selected_folder)
+        self.remove_folder_button.pack(fill="x", pady=(4, 0))
+
+        # Paths are always left-to-right, even in an RTL layout.
+        self.folder_list = tk.Listbox(row, height=3, activestyle="none", relief="flat",
+                                      highlightthickness=1, exportselection=False)
+        self._theme.style_widget(self.folder_list, style_listbox(self.folder_list))
+        yscroll = ttk.Scrollbar(row, orient="vertical", command=self.folder_list.yview)
+        self.folder_list.configure(yscrollcommand=yscroll.set)
+        yscroll.pack(side=self._end, fill="y")
+        self.folder_list.pack(side=self._start, fill="both", expand=True)
+        self.folder_list.bind("<<ListboxSelect>>", lambda _event: self._update_controls())
+        self.folder_list.bind("<Delete>", lambda _event: self._remove_selected_folder())
+        self._render_folders()
+
+        self.shared_only_check = ttk.Checkbutton(
+            parent, text=t("options.shared_only"), variable=self.shared_only_var
+        )
+        self.shared_only_check.pack(anchor=self._anchor, pady=(4, 0))
+
+    def _build_type_filter_row(self, parent: ttk.Frame) -> None:
         t = self._t
         row = ttk.Frame(parent)
-        row.pack(fill="x")
-        ttk.Label(row, text=t("folder.label")).pack(side=self._start)
-        self.folder_entry = ttk.Entry(row, textvariable=self.folder_var)
-        self.folder_entry.pack(side=self._start, fill="x", expand=True, padx=8)
-        self.browse_button = ttk.Button(row, text=t("folder.browse"),
-                                        command=self._choose_folder)
-        self.browse_button.pack(side=self._start)
+        row.pack(fill="x", pady=(8, 0))
+        self.type_filter_check = ttk.Checkbutton(
+            row, text=t("options.filter_types"), variable=self.type_filter_var,
+            command=self._update_controls,
+        )
+        self.type_filter_check.pack(side=self._start)
+        self.file_types_box = ttk.Combobox(
+            row, textvariable=self.file_types_var, width=42,
+            values=[self._category_label(category) for category in FileCategory],
+        )
+        self.file_types_box.pack(side=self._start, padx=8)
+        self.file_types_box.bind("<<ComboboxSelected>>", self._on_file_category_selected)
+        self.file_types_box.bind("<Key>", self._on_file_types_typed)
+        if self._file_category is not None:
+            self.file_types_var.set(self._category_label(self._file_category))
+        ttk.Label(row, text=t("options.filter_types_hint"), style="Hint.TLabel").pack(
+            side=self._start
+        )
+
+    def _category_label(self, category: FileCategory) -> str:
+        extensions = ", ".join(sorted(ext.lstrip(".") for ext in category.extensions))
+        return self._t("filetype.label", name=self._t(f"filetype.{category.value}"),
+                       extensions=extensions)
+
+    def _on_file_category_selected(self, _event: tk.Event) -> None:
+        self._file_category = list(FileCategory)[self.file_types_box.current()]
+
+    def _on_file_types_typed(self, event: tk.Event) -> None:
+        if event.char or event.keysym in ("BackSpace", "Delete"):
+            self._file_category = None  # the text is now the user's own list
+
+    def _chosen_file_filter(self) -> Optional[ExtensionFilter]:
+        """The filter for the next scan; raises NoExtensionsError for an empty list."""
+        if not self.type_filter_var.get():
+            return None
+        if self._file_category is not None:
+            return ExtensionFilter(self._file_category.extensions)
+        return ExtensionFilter(parse_extensions(self.file_types_var.get()))
 
     def _build_scan_row(self, parent: ttk.Frame) -> None:
         row = ttk.Frame(parent)
@@ -180,6 +284,34 @@ class DuplicateFinderApp:
         self.errors_button = ttk.Button(row, text=self._t("scan.show_errors"),
                                         command=self._show_scan_errors)
         self.errors_button.pack(side=self._start, padx=8)
+
+    def _build_sort_row(self, parent: ttk.Frame) -> None:
+        t = self._t
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=(0, 6))
+        ttk.Label(row, text=t("sort.label")).pack(side=self._start)
+        self.sort_field_box = self._readonly_combobox(
+            row, [t(f"sort.field.{field.value}") for field in SortField],
+            list(SortField).index(self._sort_field),
+        )
+        self.sort_order_box = self._readonly_combobox(
+            row, [t("sort.descending"), t("sort.ascending")], 0 if self._sort_descending else 1,
+        )
+
+    def _readonly_combobox(self, parent: ttk.Frame, values: list[str],
+                           current: int) -> ttk.Combobox:
+        box = ttk.Combobox(parent, values=values, state="readonly",
+                           width=max(len(value) for value in values) + 2)
+        box.current(current)
+        box.pack(side=self._start, padx=self._start_gap(8))
+        box.bind("<<ComboboxSelected>>", self._on_sort_changed)
+        return box
+
+    def _on_sort_changed(self, _event: tk.Event) -> None:
+        self._sort_field = list(SortField)[self.sort_field_box.current()]
+        self._sort_descending = self.sort_order_box.current() == 0
+        self._populate_tree()
+        self._update_controls()
 
     def _build_tree(self, parent: ttk.Frame) -> None:
         t = self._t
@@ -191,10 +323,10 @@ class DuplicateFinderApp:
             selectmode="browse",
         )
         for column, key, width, anchor in (
-            ("#0", "tree.heading.item", 260, self._anchor),
+            ("#0", "tree.heading.item", 320, self._anchor),
             ("action", "tree.heading.action", 190, self._anchor),
             ("size", "tree.heading.size", 100, "e"),
-            (_PATH_COLUMN, "tree.heading.path", 440, "w"),  # paths are always left-to-right
+            (_PATH_COLUMN, "tree.heading.path", 380, "w"),  # paths are always left-to-right
         ):
             self.tree.heading(column, text=t(key), anchor=anchor)
             self.tree.column(column, width=width, minwidth=80, anchor=anchor)
@@ -222,8 +354,12 @@ class DuplicateFinderApp:
         link_font.configure(underline=True)
         self._link_font = link_font  # Tk fonts vanish once garbage-collected
         self._hovered_link = None
-        self._theme.style_widget(self.tree, lambda palette: self.tree.tag_configure(
-            _LINK_HOVER_TAG, foreground=palette.accent, font=link_font))
+        self._theme.style_widget(self.tree, lambda palette: (
+            self.tree.tag_configure(_RISKY_TAG, foreground=palette.warning),
+            # Configured last, so it wins over the risky color while hovered.
+            self.tree.tag_configure(_LINK_HOVER_TAG, foreground=palette.accent,
+                                    font=link_font),
+        ))
 
         self.tree.bind("<Motion>", self._on_tree_motion)
         self.tree.bind("<Leave>", lambda _event: self._set_hovered_link(None))
@@ -247,9 +383,9 @@ class DuplicateFinderApp:
         if item == self._hovered_link:
             return
         if self._hovered_link is not None and self.tree.exists(self._hovered_link):
-            self.tree.item(self._hovered_link, tags=())
+            self.tree.item(self._hovered_link, tags=self._row_tags(self._hovered_link))
         if item is not None:
-            self.tree.item(item, tags=(_LINK_HOVER_TAG,))
+            self.tree.item(item, tags=self._row_tags(item) + (_LINK_HOVER_TAG,))
         self.tree.configure(cursor="hand2" if item is not None else "")
         self._hovered_link = item
 
@@ -359,11 +495,13 @@ class DuplicateFinderApp:
         t = self._t
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(8, 0))
+        removes_files = button_style(ButtonRole.DESTRUCTIVE)
         self.quarantine_button = ttk.Button(row, text=t("action.quarantine"),
-                                            command=self._remove_to_quarantine)
+                                            command=self._remove_to_quarantine,
+                                            style=removes_files)
         self.quarantine_button.pack(side=self._start)
         self.trash_button = ttk.Button(row, text=t("action.trash"),
-                                       command=self._remove_to_trash)
+                                       command=self._remove_to_trash, style=removes_files)
         self.trash_button.pack(side=self._start, padx=8)
 
     # ------------------------------------------------------------ control state
@@ -375,11 +513,23 @@ class DuplicateFinderApp:
     def _update_controls(self) -> None:
         t = self._t
         idle = _state(not self._busy)
-        self.browse_button.configure(state=idle)
-        self.folder_entry.configure(state=idle)
+        self.add_folder_button.configure(state=idle)
+        self.folder_list.configure(state=idle)
+        self.remove_folder_button.configure(
+            state=_state(not self._busy and bool(self.folder_list.curselection()))
+        )
+        self.shared_only_check.configure(state=_state(not self._busy and len(self._folders) > 1))
+        self.type_filter_check.configure(state=idle)
+        self.file_types_box.configure(
+            state=_state(not self._busy and self.type_filter_var.get())
+        )
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
-        self.scan_button.configure(text=t("scan.cancel" if self._busy else "scan.start"))
+        # While busy the button cancels, which is not the main next step.
+        self.scan_button.configure(
+            text=t("scan.cancel" if self._busy else "scan.start"),
+            style=button_style(ButtonRole.NEUTRAL if self._busy else ButtonRole.PRIMARY),
+        )
 
         has_errors = bool(self._scan_result and self._scan_result.errors)
         self.errors_button.configure(state=_state(not self._busy and has_errors))
@@ -411,10 +561,33 @@ class DuplicateFinderApp:
 
     # ------------------------------------------------------------------ scanning
 
-    def _choose_folder(self) -> None:
+    def _add_folder(self) -> None:
         selected = filedialog.askdirectory(title=self._t("folder.dialog_title"))
-        if selected:
-            self.folder_var.set(selected)
+        if not selected:
+            return
+        try:
+            self._folders.add(selected)
+        except NotAFolderError:
+            self._show_error("error.bad_folder.title", "error.bad_folder.body")
+            return
+        except FolderAlreadyIncludedError:
+            self._show_error("error.folder_included.title", "error.folder_included.body")
+            return
+        self._render_folders()
+        self._update_controls()
+
+    def _remove_selected_folder(self) -> None:
+        selection = self.folder_list.curselection()
+        if self._busy or not selection:
+            return
+        self._folders.remove(selection[0])
+        self._render_folders()
+        self._update_controls()
+
+    def _render_folders(self) -> None:
+        self.folder_list.delete(0, "end")
+        for folder in self._folders.folders:
+            self.folder_list.insert("end", str(folder))
 
     def _on_scan_clicked(self) -> None:
         if self._busy:
@@ -422,20 +595,24 @@ class DuplicateFinderApp:
             self._set_status(_message("status.cancelling"))
             return
         try:
-            folder = parse_scan_folder(self.folder_var.get())
+            roots = self._folders.require_any()
         except FolderNotSelectedError:
             self._show_error("error.no_folder.title", "error.no_folder.body")
             return
-        except NotAFolderError:
-            self._show_error("error.bad_folder.title", "error.bad_folder.body")
+        try:
+            file_filter = self._chosen_file_filter()
+        except NoExtensionsError:
+            self._show_error("error.no_extensions.title", "error.no_extensions.body")
             return
-        self._start_scan(folder)
+        shared_only = len(roots) > 1 and self.shared_only_var.get()
+        self._start_scan(ScanRequest(roots, file_filter, shared_only))
 
-    def _start_scan(self, root: Path) -> None:
+    def _start_scan(self, request: ScanRequest) -> None:
+        self._scan_request = request
         self._set_results(None)
         self._set_status(_message("status.scanning"))
         self._run_task(
-            lambda report, cancel: find_duplicates(root, on_progress=report, cancel_event=cancel),
+            request.run,
             on_success=self._on_scan_finished,
             failure_title_key="error.scan_failed.title",
         )
@@ -461,6 +638,9 @@ class DuplicateFinderApp:
     def _set_results(self, result: Optional[ScanResult]) -> None:
         self._scan_result = result
         self._plan = ReviewPlan(result.groups) if result else None
+        self._risky_files = self._risk.risky_files(
+            path for group in (result.groups if result else ()) for path in group.files
+        )
         self._populate_tree()
         self._update_controls()
 
@@ -469,15 +649,56 @@ class DuplicateFinderApp:
         self._group_item_ids.clear()
         self._item_targets.clear()
         self._set_hovered_link(None)
+        self._group_numbers.clear()
         if self._plan is None:
             return
-        for index, group in enumerate(self._plan.groups):
-            group_id = self.tree.insert("", "end", open=True)
-            self._group_item_ids.append(group_id)
+        order = ordered_group_indices(self._plan.groups, self._sort_field,
+                                      self._sort_descending)
+        risky = [index for index in order if self._is_risky_group(index)]
+        if not risky:
+            self._insert_groups("", order, first_number=1)
+            return
+        # Risky groups get a section of their own, listed first, so they are
+        # reviewed together and never mistaken for ordinary duplicates.
+        others = [index for index in order if not self._is_risky_group(index)]
+        sections = (("tree.section.risky", risky, (_RISKY_TAG,)),
+                    ("tree.section.other", others, ()))
+        number = 1
+        for key, indices, tags in sections:
+            if indices:
+                section_id = self.tree.insert("", "end", open=True, tags=tags,
+                                              text=self._t(key, count=len(indices)))
+                self._insert_groups(section_id, indices, first_number=number)
+                number += len(indices)
+
+    def _insert_groups(self, parent: str, indices: list[int], first_number: int) -> None:
+        groups = self._plan.groups
+        for number, index in enumerate(indices, start=first_number):
+            group_id = self.tree.insert(parent, "end", open=True)
+            self._group_item_ids[index] = group_id
+            self._group_numbers[index] = number
             self._item_targets[group_id] = (index, None)
-            for path in group.files:
+            for path in groups[index].files:
                 self._item_targets[self.tree.insert(group_id, "end")] = (index, path)
             self._render_group(index)
+
+    def _is_risky_group(self, index: int) -> bool:
+        return any(path in self._risky_files for path in self._plan.groups[index].files)
+
+    def _row_tags(self, item: str) -> tuple[str, ...]:
+        _, path = self._item_targets.get(item, (None, None))
+        return (_RISKY_TAG,) if path in self._risky_files else ()
+
+    def _file_label(self, path: Path) -> str:
+        reasons = self._risky_files.get(path)
+        if not reasons:
+            return path.name
+        return self._t("tree.risky_file", name=path.name,
+                       reasons=self._describe_reasons(reasons))
+
+    def _describe_reasons(self, reasons: frozenset[RiskReason]) -> str:
+        ordered = [reason for reason in RiskReason if reason in reasons]  # stable order
+        return self._t("risk.separator").join(self._t(f"risk.{r.value}") for r in ordered)
 
     def _render_group(self, index: int) -> None:
         t = self._t
@@ -486,7 +707,7 @@ class DuplicateFinderApp:
         group_id = self._group_item_ids[index]
         size = format_size(group.size)
 
-        title = t("tree.group", number=index + 1, count=len(group.files))
+        title = t("tree.group", number=self._group_numbers[index], count=len(group.files))
         if skipped:
             title += t("tree.group_skipped_suffix")
         reclaimable = "" if skipped else t(
@@ -501,7 +722,8 @@ class DuplicateFinderApp:
                 action = t("tree.unchanged")
             else:
                 action = t("tree.keep" if self._plan.is_kept(index, path) else "tree.remove")
-            self.tree.item(file_id, text=path.name, values=(action, size, str(path)))
+            self.tree.item(file_id, text=self._file_label(path),
+                           values=(action, size, str(path)), tags=self._row_tags(file_id))
 
     def _selected_target(self) -> tuple[Optional[int], Optional[Path]]:
         selection = self.tree.selection()
@@ -535,7 +757,7 @@ class DuplicateFinderApp:
         if not folder:
             return
         try:
-            remover = QuarantineRemover(Path(folder), self._scan_result.root)
+            remover = QuarantineRemover(Path(folder), self._scan_result.roots)
         except ValueError:
             self._show_error("error.bad_folder.title", "error.bad_quarantine.body")
             return
@@ -549,10 +771,13 @@ class DuplicateFinderApp:
 
     def _confirm_and_remove(self, remover: Remover, lead: str) -> None:
         t = self._t
+        selections = self._plan.selections()
+        to_remove = [path for selection in selections for path in selection.files_to_remove]
+        if not self._confirm_risky_removal(to_remove):
+            return
         details = t("confirm.details", size=format_size(self._plan.reclaimable_bytes))
         if not messagebox.askyesno(t("confirm.title"), f"{lead}\n\n{details}", icon="warning"):
             return
-        selections = self._plan.selections()
         self._run_task(
             lambda report, cancel: remove_duplicates(
                 selections, remover, on_progress=report, cancel_event=cancel
@@ -563,6 +788,8 @@ class DuplicateFinderApp:
 
     def _delete_now(self, group_index: int, path: Path) -> None:
         t = self._t
+        if not self._confirm_risky_removal([path]):
+            return
         if not messagebox.askyesno(t("confirm.delete_now.title"),
                                    t("confirm.delete_now.body", path=path), icon="warning"):
             return
@@ -574,6 +801,25 @@ class DuplicateFinderApp:
             on_success=lambda report: self._on_delete_now_finished(group_index, path, report),
             failure_title_key="error.removal_failed.title",
         )
+
+    def _confirm_risky_removal(self, paths: list[Path]) -> bool:
+        """Warn before risky files are removed; True if there are none or the user agrees.
+
+        This comes on top of the usual confirmation and defaults to "No", so a
+        hurried Enter cannot remove a program or system file.
+        """
+        risky = [path for path in paths if path in self._risky_files]
+        if not risky:
+            return True
+        t = self._t
+        lines = [t("confirm.risky.item", path=path,
+                   reasons=self._describe_reasons(self._risky_files[path]))
+                 for path in risky[:_MAX_LISTED_RISKY_FILES]]
+        if len(risky) > _MAX_LISTED_RISKY_FILES:
+            lines.append(t("confirm.risky.more", count=len(risky) - _MAX_LISTED_RISKY_FILES))
+        body = t("confirm.risky.body", count=len(risky), files="\n".join(lines))
+        return messagebox.askyesno(t("confirm.risky.title"), body, icon="warning",
+                                   default="no")
 
     def _on_delete_now_finished(self, group_index: int, path: Path,
                                 report: RemovalReport) -> None:
@@ -592,7 +838,7 @@ class DuplicateFinderApp:
         messagebox.showinfo(t("result.title"), message)
         if report.failures:
             self._show_issues("dialog.failures.title", report.failures)
-        self._start_scan(self._scan_result.root)  # refresh with the same root
+        self._start_scan(self._scan_request)  # refresh with the same folders and options
 
     # ---------------------------------------------------------- task plumbing
 
@@ -686,7 +932,7 @@ def main() -> None:
     store = SettingsStore(default_settings_path())
     theme = ThemeManager(root, store)
     theme.start()
-    DuplicateFinderApp(root, theme, store)
+    DuplicateFinderApp(root, theme, store, RiskAssessor.for_this_computer())
     root.mainloop()
 
 

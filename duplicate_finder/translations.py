@@ -17,15 +17,28 @@ ENGLISH = {
     "theme.light": "Light",
     "theme.dark": "Dark",
 
-    "folder.label": "Folder to scan:",
-    "folder.browse": "Browse…",
+    "folder.label": "Folders to scan (duplicates are matched across all of them):",
+    "folder.add": "Add folder…",
+    "folder.remove": "Remove",
     "folder.dialog_title": "Choose a folder to scan",
+
+    "options.shared_only": "Only files shared between folders",
+    "options.filter_types": "Only these file types:",
+    "options.filter_types_hint": "or type extensions, e.g. pdf, docx",
+
+    "filetype.label": "{name} ({extensions})",
+    "filetype.documents": "Documents",
+    "filetype.pdf": "PDF",
+    "filetype.images": "Images",
+    "filetype.videos": "Videos",
+    "filetype.audio": "Audio",
+    "filetype.archives": "Archives",
 
     "scan.start": "Start scan",
     "scan.cancel": "Cancel",
     "scan.show_errors": "Show errors",
 
-    "status.ready": "Choose a folder and start the scan.",
+    "status.ready": "Add one or more folders and start the scan.",
     "status.scanning": "Scanning…",
     "status.cancelling": "Cancelling…",
     "status.cancelled": "Operation cancelled.",
@@ -44,6 +57,13 @@ ENGLISH = {
     "stage.full_hash": "Full content comparison",
     "stage.removing": "Moving duplicate copies",
 
+    "sort.label": "Sort results by:",
+    "sort.field.size": "File size",
+    "sort.field.name": "File name",
+    "sort.field.type": "File type",
+    "sort.descending": "Descending",
+    "sort.ascending": "Ascending",
+
     "tree.heading.item": "Group / File",
     "tree.heading.action": "Action",
     "tree.heading.size": "Size",
@@ -51,6 +71,9 @@ ENGLISH = {
     "tree.group": "Group {number} ({count} files)",
     "tree.group_skipped_suffix": " — skipped",
     "tree.group_reclaimable": "Frees {size}",
+    "tree.section.risky": "⚠ Risky to remove ({count:,} groups)",
+    "tree.section.other": "Other duplicates ({count:,} groups)",
+    "tree.risky_file": "⚠ {name} ({reasons})",
     "tree.keep": "✔ Keep",
     "tree.remove": "✖ Remove",
     "tree.unchanged": "— Unchanged",
@@ -77,15 +100,25 @@ ENGLISH = {
 
     "error.no_folder.title": "No folder selected",
     "error.no_folder.body": (
-        "You haven't selected a folder yet.\n"
-        "Please use “Browse…” to choose the folder you want to scan."
+        "You haven't added a folder yet.\n"
+        "Please use “Add folder…” to choose the folders you want to scan."
+    ),
+    "error.no_extensions.title": "No file type chosen",
+    "error.no_extensions.body": (
+        "The file type filter is on, but no extension was given.\n"
+        "Pick a type from the list or type extensions such as: pdf, docx"
+    ),
+    "error.folder_included.title": "Folder already included",
+    "error.folder_included.body": (
+        "This folder is already in the list, or inside a folder that is.\n"
+        "It will be scanned anyway."
     ),
     "error.bad_folder.title": "Invalid path",
     "error.bad_folder.body": (
         "The path does not exist or is not a folder.\nPlease choose a valid folder."
     ),
     "error.bad_quarantine.body": (
-        "The quarantine folder must not be inside the scanned folder, nor contain it."
+        "The quarantine folder must not be inside a scanned folder, nor contain one."
     ),
     "error.scan_failed.title": "Scan error",
     "error.removal_failed.title": "Move error",
@@ -108,6 +141,22 @@ ENGLISH = {
         "It is first compared again with another identical copy, which stays in place. "
         "Continue?"
     ),
+
+    "risk.system_folder": "system folder",
+    "risk.app_data": "app data",
+    "risk.program_file": "program file",
+    "risk.separator": ", ",
+    "confirm.risky.title": "Warning: risky files",
+    "confirm.risky.body": (
+        "{count:,} of the files to remove may be needed by the operating system or by a program:\n\n"
+        "{files}\n\n"
+        "An identical copy will stay in place, but programs usually look for their "
+        "files in one exact location, so removing these copies can stop a program or "
+        "the system from working.\n\n"
+        "Remove them anyway? Choose “No” to go back and keep or skip them."
+    ),
+    "confirm.risky.item": "• {path} — {reasons}",
+    "confirm.risky.more": "… and {count:,} more",
 
     "confirm.title": "Confirm removal",
     "confirm.lead.quarantine": "{count:,} duplicate files will be moved to:\n{folder}",
@@ -142,15 +191,28 @@ PERSIAN = {
     "theme.light": "روشن",
     "theme.dark": "تیره",
 
-    "folder.label": "پوشه‌ی موردنظر:",
-    "folder.browse": "انتخاب پوشه…",
+    "folder.label": "پوشه‌های موردنظر (فایل‌های تکراری بین همه‌ی آن‌ها پیدا می‌شوند):",
+    "folder.add": "افزودن پوشه…",
+    "folder.remove": "حذف از فهرست",
     "folder.dialog_title": "انتخاب پوشه برای اسکن",
+
+    "options.shared_only": "فقط فایل‌های مشترک بین پوشه‌ها",
+    "options.filter_types": "فقط این نوع فایل‌ها:",
+    "options.filter_types_hint": "یا پسوندها را بنویسید، مثلاً pdf, docx",
+
+    "filetype.label": "{name} ({extensions})",
+    "filetype.documents": "اسناد",
+    "filetype.pdf": "PDF",
+    "filetype.images": "تصاویر",
+    "filetype.videos": "ویدیوها",
+    "filetype.audio": "صوتی",
+    "filetype.archives": "فایل‌های فشرده",
 
     "scan.start": "شروع اسکن",
     "scan.cancel": "لغو",
     "scan.show_errors": "نمایش خطاها",
 
-    "status.ready": "یک پوشه انتخاب کنید و اسکن را شروع کنید.",
+    "status.ready": "یک یا چند پوشه اضافه کنید و اسکن را شروع کنید.",
     "status.scanning": "در حال اسکن…",
     "status.cancelling": "در حال لغو…",
     "status.cancelled": "عملیات لغو شد.",
@@ -169,6 +231,13 @@ PERSIAN = {
     "stage.full_hash": "مقایسه‌ی کامل محتوا",
     "stage.removing": "در حال انتقال نسخه‌های تکراری",
 
+    "sort.label": "مرتب‌سازی نتایج بر اساس:",
+    "sort.field.size": "حجم فایل",
+    "sort.field.name": "نام فایل",
+    "sort.field.type": "نوع فایل",
+    "sort.descending": "نزولی",
+    "sort.ascending": "صعودی",
+
     "tree.heading.item": "گروه / فایل",
     "tree.heading.action": "وضعیت",
     "tree.heading.size": "حجم",
@@ -176,6 +245,9 @@ PERSIAN = {
     "tree.group": "گروه {number} ({count} فایل)",
     "tree.group_skipped_suffix": " — رد شده",
     "tree.group_reclaimable": "آزاد می‌شود: {size}",
+    "tree.section.risky": "⚠ حذف پرخطر ({count:,} گروه)",
+    "tree.section.other": "سایر فایل‌های تکراری ({count:,} گروه)",
+    "tree.risky_file": "⚠ {name} ({reasons})",
     "tree.keep": "✔ نگه‌داشته می‌شود",
     "tree.remove": "✖ حذف می‌شود",
     "tree.unchanged": "— بدون تغییر",
@@ -202,15 +274,25 @@ PERSIAN = {
 
     "error.no_folder.title": "پوشه‌ای انتخاب نشده",
     "error.no_folder.body": (
-        "هنوز پوشه‌ای انتخاب نکرده‌اید.\n"
-        "لطفاً با دکمه‌ی «انتخاب پوشه…» پوشه‌ای را که می‌خواهید بررسی شود انتخاب کنید."
+        "هنوز پوشه‌ای اضافه نکرده‌اید.\n"
+        "لطفاً با دکمه‌ی «افزودن پوشه…» پوشه‌هایی را که می‌خواهید بررسی شوند انتخاب کنید."
+    ),
+    "error.no_extensions.title": "نوع فایلی انتخاب نشده",
+    "error.no_extensions.body": (
+        "فیلتر نوع فایل روشن است اما پسوندی وارد نشده.\n"
+        "یک نوع از فهرست انتخاب کنید یا پسوندها را بنویسید، مثلاً: pdf, docx"
+    ),
+    "error.folder_included.title": "پوشه از قبل در فهرست است",
+    "error.folder_included.body": (
+        "این پوشه یا خودش در فهرست هست یا داخل پوشه‌ای از فهرست قرار دارد.\n"
+        "در هر صورت اسکن خواهد شد."
     ),
     "error.bad_folder.title": "مسیر نامعتبر",
     "error.bad_folder.body": (
         "مسیر واردشده وجود ندارد یا یک پوشه نیست.\nلطفاً یک پوشه‌ی معتبر انتخاب کنید."
     ),
     "error.bad_quarantine.body": (
-        "پوشه‌ی قرنطینه نباید داخل پوشه‌ی اسکن‌شده باشد و نباید آن را در بر بگیرد."
+        "پوشه‌ی قرنطینه نباید داخل یکی از پوشه‌های اسکن‌شده باشد و نباید یکی از آن‌ها را در بر بگیرد."
     ),
     "error.scan_failed.title": "خطا در اسکن",
     "error.removal_failed.title": "خطا در انتقال",
@@ -233,6 +315,23 @@ PERSIAN = {
         "پیش از آن دوباره با یک نسخه‌ی یکسان دیگر مقایسه می‌شود که سر جایش می‌ماند. "
         "ادامه می‌دهید؟"
     ),
+
+    "risk.system_folder": "پوشه‌ی سیستمی",
+    "risk.app_data": "داده‌ی برنامه",
+    "risk.program_file": "فایل اجرایی/برنامه",
+    "risk.separator": "، ",
+    "confirm.risky.title": "هشدار: فایل‌های خطرناک",
+    "confirm.risky.body": (
+        "{count:,} فایل از فایل‌هایی که حذف می‌شوند ممکن است مورد نیاز سیستم‌عامل یا یک "
+        "برنامه باشند:\n\n"
+        "{files}\n\n"
+        "یک نسخه‌ی یکسان سر جایش می‌ماند، اما برنامه‌ها معمولاً فایل‌هایشان را فقط در "
+        "یک مسیر مشخص جست‌وجو می‌کنند؛ پس حذف این نسخه‌ها ممکن است باعث از کار افتادن "
+        "یک برنامه یا خود سیستم شود.\n\n"
+        "با این حال حذف شوند؟ برای بازگشت و نگه‌داشتن یا رد کردن آن‌ها «خیر» را بزنید."
+    ),
+    "confirm.risky.item": "• {path} — {reasons}",
+    "confirm.risky.more": "… و {count:,} فایل دیگر",
 
     "confirm.title": "تأیید حذف",
     "confirm.lead.quarantine": "{count:,} فایل تکراری به این پوشه منتقل می‌شوند:\n{folder}",
