@@ -154,3 +154,11 @@ def test_listing_progress_counts_files_a_filter_rejects(tmp_path, make_file):
     )
 
     assert counts  # before, a filter that rejects everything reported nothing
+
+
+@pytest.mark.parametrize("trash", ["$Recycle.Bin/S-1-5-21", ".Trash-1000/files", ".Trashes"])
+def test_files_in_the_trash_are_not_compared(tmp_path, make_file, trash):
+    make_file("kept.txt", b"removed earlier")
+    make_file(f"{trash}/kept.txt", b"removed earlier")
+
+    assert find_duplicates(tmp_path).groups == ()
