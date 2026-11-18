@@ -169,8 +169,10 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
 
     style.map(
         "TCombobox",
-        fieldbackground=[("disabled", p.background), ("readonly", p.surface)],
-        bordercolor=[("focus", p.accent)],
+        fieldbackground=[("disabled", p.disabled_field), ("readonly", p.surface)],
+        foreground=[("disabled", p.disabled_text)],
+        bordercolor=[("disabled", p.disabled_field), ("focus", p.accent)],
+        background=[("disabled", p.disabled_field)],
         arrowcolor=[("disabled", p.disabled_text)],
     )
     style.configure("TCombobox", arrowcolor=p.text, background=p.control)

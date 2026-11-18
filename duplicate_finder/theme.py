@@ -39,6 +39,7 @@ class Palette:
     is_dark: bool
     background: str
     surface: str  # input fields, lists
+    disabled_field: str  # input fields that can't be used; clearly apart from ``surface``
     text: str
     muted_text: str
     disabled_text: str
@@ -67,6 +68,7 @@ LIGHT_PALETTE = Palette(
     is_dark=False,
     background="#f3f3f3",
     surface="#ffffff",
+    disabled_field="#e1e1e1",
     text="#1b1b1b",
     muted_text="#5c5c5c",
     disabled_text="#a0a0a0",
@@ -89,6 +91,7 @@ DARK_PALETTE = Palette(
     is_dark=True,
     background="#202020",
     surface="#2b2b2b",
+    disabled_field="#171717",
     text="#f0f0f0",
     muted_text="#a6a6a6",
     disabled_text="#6b6b6b",
