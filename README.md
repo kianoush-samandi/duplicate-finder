@@ -11,6 +11,7 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
   all of them. Tick *Only files shared between folders* to see just the files they have in common.
 - **Filter by file type:** tick *Only these file types* and pick a category (Documents, PDF,
   Images, Videos, Audio, Archives) or type your own extensions, e.g. `pdf, docx`.
+- **Sort the results** by file size, name or type, ascending or descending.
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
 - **You choose the copies to keep** in each group (double-click keeps only that copy), and can
   **skip** any group. At least one copy of every group is always kept.
@@ -95,6 +96,7 @@ duplicate_finder/
 ├── hashing.py       # partial_digest / full_digest
 ├── scanner.py       # find_duplicates — pure logic, no GUI, never modifies files
 ├── removal.py       # Remover strategies (Quarantine / Trash) + verified remove_duplicates
+├── result_order.py  # SortField + ordered_group_indices — how groups are listed
 ├── review.py        # ReviewPlan — the user's choices (kept copies, skipped groups)
 ├── progress.py      # throttled progress reporting + cancellation, shared by all operations
 ├── background.py    # runs work off the Tk thread and hands results back safely

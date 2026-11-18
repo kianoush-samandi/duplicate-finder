@@ -57,6 +57,13 @@ ENGLISH = {
     "stage.full_hash": "Full content comparison",
     "stage.removing": "Moving duplicate copies",
 
+    "sort.label": "Sort results by:",
+    "sort.field.size": "File size",
+    "sort.field.name": "File name",
+    "sort.field.type": "File type",
+    "sort.descending": "Descending",
+    "sort.ascending": "Ascending",
+
     "tree.heading.item": "Group / File",
     "tree.heading.action": "Action",
     "tree.heading.size": "Size",
@@ -204,6 +211,13 @@ PERSIAN = {
     "stage.partial_hash": "مقایسه‌ی سریع (ابتدای فایل‌ها)",
     "stage.full_hash": "مقایسه‌ی کامل محتوا",
     "stage.removing": "در حال انتقال نسخه‌های تکراری",
+
+    "sort.label": "مرتب‌سازی نتایج بر اساس:",
+    "sort.field.size": "حجم فایل",
+    "sort.field.name": "نام فایل",
+    "sort.field.type": "نوع فایل",
+    "sort.descending": "نزولی",
+    "sort.ascending": "صعودی",
 
     "tree.heading.item": "گروه / فایل",
     "tree.heading.action": "وضعیت",

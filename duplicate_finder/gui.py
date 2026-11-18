@@ -24,6 +24,7 @@ from .i18n import Language, Translator
 from .models import FileIssue, RemovalReport, ScanResult
 from .progress import ProgressCallback, Stage
 from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
+from .result_order import SortField, ordered_group_indices
 from .review import ReviewPlan
 from .scan_folders import FolderAlreadyIncludedError, ScanFolders
 from .scanner import find_duplicates
@@ -83,6 +84,8 @@ class DuplicateFinderApp:
         # A ready-made category picked from the list, or None for typed extensions.
         # Kept apart from the text so the label can be re-translated on a rebuild.
         self._file_category: Optional[FileCategory] = FileCategory.DOCUMENTS
+        self._sort_field = SortField.SIZE
+        self._sort_descending = True
         self.status_var = tk.StringVar()
         self.plan_var = tk.StringVar()
         self.theme_var = tk.StringVar(value=theme.mode.value)
@@ -91,7 +94,8 @@ class DuplicateFinderApp:
         # Widget bookkeeping, recreated by every rebuild.
         self._main: Optional[ttk.Frame] = None
         self._language_buttons: list[ttk.Radiobutton] = []
-        self._group_item_ids: list[str] = []
+        self._group_item_ids: dict[int, str] = {}  # plan group index -> tree item
+        self._group_numbers: dict[int, int] = {}  # plan group index -> number shown
         self._item_targets: dict[str, tuple[int, Optional[Path]]] = {}
         self._hovered_link: Optional[str] = None
 
@@ -143,6 +147,7 @@ class DuplicateFinderApp:
             anchor=self._anchor, pady=(0, 6)
         )
 
+        self._build_sort_row(main)
         self._build_tree(main)
         self._build_review_row(main)
         self._build_action_row(main)
@@ -178,6 +183,10 @@ class DuplicateFinderApp:
             self._radio(preferences, t(f"theme.{mode.value}"), mode.value,
                         self.theme_var, self._on_theme_selected)
 
+    def _start_gap(self, size: int) -> tuple[int, int]:
+        """Horizontal padding on the start side only (left in LTR, right in RTL)."""
+        return (0, size) if self._rtl else (size, 0)
+
     def _radio(self, parent, text, value, variable, command) -> ttk.Radiobutton:
         button = ttk.Radiobutton(parent, text=text, value=value, variable=variable,
                                  command=command)
@@ -194,7 +203,7 @@ class DuplicateFinderApp:
         row.pack(fill="x", pady=(4, 0))
 
         buttons = ttk.Frame(row)
-        buttons.pack(side=self._end, fill="y", padx=(8, 0) if not self._rtl else (0, 8))
+        buttons.pack(side=self._end, fill="y", padx=self._start_gap(8))
         self.add_folder_button = ttk.Button(buttons, text=t("folder.add"),
                                             command=self._add_folder)
         self.add_folder_button.pack(fill="x")
@@ -269,6 +278,34 @@ class DuplicateFinderApp:
         self.errors_button = ttk.Button(row, text=self._t("scan.show_errors"),
                                         command=self._show_scan_errors)
         self.errors_button.pack(side=self._start, padx=8)
+
+    def _build_sort_row(self, parent: ttk.Frame) -> None:
+        t = self._t
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=(0, 6))
+        ttk.Label(row, text=t("sort.label")).pack(side=self._start)
+        self.sort_field_box = self._readonly_combobox(
+            row, [t(f"sort.field.{field.value}") for field in SortField],
+            list(SortField).index(self._sort_field),
+        )
+        self.sort_order_box = self._readonly_combobox(
+            row, [t("sort.descending"), t("sort.ascending")], 0 if self._sort_descending else 1,
+        )
+
+    def _readonly_combobox(self, parent: ttk.Frame, values: list[str],
+                           current: int) -> ttk.Combobox:
+        box = ttk.Combobox(parent, values=values, state="readonly",
+                           width=max(len(value) for value in values) + 2)
+        box.current(current)
+        box.pack(side=self._start, padx=self._start_gap(8))
+        box.bind("<<ComboboxSelected>>", self._on_sort_changed)
+        return box
+
+    def _on_sort_changed(self, _event: tk.Event) -> None:
+        self._sort_field = list(SortField)[self.sort_field_box.current()]
+        self._sort_descending = self.sort_order_box.current() == 0
+        self._populate_tree()
+        self._update_controls()
 
     def _build_tree(self, parent: ttk.Frame) -> None:
         t = self._t
@@ -593,13 +630,17 @@ class DuplicateFinderApp:
         self._group_item_ids.clear()
         self._item_targets.clear()
         self._set_hovered_link(None)
+        self._group_numbers.clear()
         if self._plan is None:
             return
-        for index, group in enumerate(self._plan.groups):
+        groups = self._plan.groups
+        order = ordered_group_indices(groups, self._sort_field, self._sort_descending)
+        for number, index in enumerate(order, start=1):
             group_id = self.tree.insert("", "end", open=True)
-            self._group_item_ids.append(group_id)
+            self._group_item_ids[index] = group_id
+            self._group_numbers[index] = number
             self._item_targets[group_id] = (index, None)
-            for path in group.files:
+            for path in groups[index].files:
                 self._item_targets[self.tree.insert(group_id, "end")] = (index, path)
             self._render_group(index)
 
@@ -610,7 +651,7 @@ class DuplicateFinderApp:
         group_id = self._group_item_ids[index]
         size = format_size(group.size)
 
-        title = t("tree.group", number=index + 1, count=len(group.files))
+        title = t("tree.group", number=self._group_numbers[index], count=len(group.files))
         if skipped:
             title += t("tree.group_skipped_suffix")
         reclaimable = "" if skipped else t(
