@@ -22,6 +22,7 @@ class ButtonRole(Enum):
 
     NEUTRAL = "neutral"  # everyday actions that change nothing on disk
     PRIMARY = "primary"  # the main next step (one per screen)
+    CAUTION = "caution"  # stops a running task (Cancel), easy to spot at a glance
     DESTRUCTIVE = "destructive"  # removes files
 
 
@@ -49,11 +50,14 @@ class Palette:
     selection_text: str
     warning: str  # text of risky items; readable on ``surface``
     primary_button: ButtonColors
+    caution_button: ButtonColors
     destructive_button: ButtonColors
 
     def button_colors(self, role: ButtonRole) -> ButtonColors:
         if role is ButtonRole.PRIMARY:
             return self.primary_button
+        if role is ButtonRole.CAUTION:
+            return self.caution_button
         if role is ButtonRole.DESTRUCTIVE:
             return self.destructive_button
         return ButtonColors(self.control, self.control_hover, self.text, self.border)
@@ -75,6 +79,8 @@ LIGHT_PALETTE = Palette(
     warning="#9d5d00",
     primary_button=ButtonColors(background="#0067c0", hover="#005a9e", text="#ffffff",
                                 border="#0067c0"),
+    caution_button=ButtonColors(background="#ffb900", hover="#e6a700", text="#000000",
+                                border="#ffb900"),
     destructive_button=ButtonColors(background="#c42b1c", hover="#a52416", text="#ffffff",
                                     border="#c42b1c"),
 )
@@ -96,6 +102,8 @@ DARK_PALETTE = Palette(
     # Lighter tones with dark text, as dark themes use, so they don't glare.
     primary_button=ButtonColors(background="#4cc2ff", hover="#3aa8e0", text="#000000",
                                 border="#4cc2ff"),
+    caution_button=ButtonColors(background="#ffc83d", hover="#e6b432", text="#000000",
+                                border="#ffc83d"),
     destructive_button=ButtonColors(background="#f1707a", hover="#e05a63", text="#000000",
                                     border="#f1707a"),
 )

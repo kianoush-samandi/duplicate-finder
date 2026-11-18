@@ -526,10 +526,10 @@ class DuplicateFinderApp:
         )
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
-        # While busy the button cancels, which is not the main next step.
+        # While busy the same button cancels; amber makes it easy to find.
         self.scan_button.configure(
             text=t("scan.cancel" if self._busy else "scan.start"),
-            style=button_style(ButtonRole.NEUTRAL if self._busy else ButtonRole.PRIMARY),
+            style=button_style(ButtonRole.CAUTION if self._busy else ButtonRole.PRIMARY),
         )
 
         has_errors = bool(self._scan_result and self._scan_result.errors)
