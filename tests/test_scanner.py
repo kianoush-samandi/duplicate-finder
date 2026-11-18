@@ -139,3 +139,26 @@ def test_file_filter_limits_which_files_are_compared(tmp_path, make_file):
 
     assert [set(group.files) for group in result.groups] == [pdfs]
     assert result.total_files == 2
+
+
+def test_listing_progress_counts_files_a_filter_rejects(tmp_path, make_file):
+    for index in range(3):
+        make_file(f"f{index}.txt", b"x")
+    counts = []
+
+    find_duplicates(
+        tmp_path,
+        file_filter=ExtensionFilter(frozenset({".pdf"})),
+        on_progress=lambda stage, done, total: counts.append(done)
+        if stage.value == "collecting" else None,
+    )
+
+    assert counts  # before, a filter that rejects everything reported nothing
+
+
+@pytest.mark.parametrize("trash", ["$Recycle.Bin/S-1-5-21", ".Trash-1000/files", ".Trashes"])
+def test_files_in_the_trash_are_not_compared(tmp_path, make_file, trash):
+    make_file("kept.txt", b"removed earlier")
+    make_file(f"{trash}/kept.txt", b"removed earlier")
+
+    assert find_duplicates(tmp_path).groups == ()

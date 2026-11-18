@@ -19,6 +19,7 @@ from .errors import FileChangedError
 from .hashing import full_digest, partial_digest
 from .models import DuplicateGroup, FileIssue, IssueKind, ScanResult
 from .progress import ProgressCallback, ProgressReporter, Stage
+from .trash_folders import is_trash_folder
 
 PathGroups = list[list[Path]]
 FileFilter = Callable[[Path], bool]
@@ -103,6 +104,10 @@ def _collect_files_by_size(
         errors.append(FileIssue.from_os_error(exc.filename, exc))
 
     for path in _walk_files(roots, reporter, on_walk_error):
+        # Counts every file looked at, so progress keeps moving even when a
+        # filter or the size limit rejects most of them.
+        count += 1
+        reporter.report(Stage.COLLECTING, count)
         if file_filter is not None and not file_filter(path):
             continue  # checked first: it needs no disk access
         try:
@@ -122,8 +127,6 @@ def _collect_files_by_size(
         seen_inodes.add(inode)
 
         files_by_size[stat.st_size].append(path)
-        count += 1
-        reporter.report(Stage.COLLECTING, count)
 
     return files_by_size
 
@@ -131,12 +134,12 @@ def _collect_files_by_size(
 def _walk_files(
     roots: Iterable[Path], reporter: ProgressReporter, on_error: Callable[[OSError], None]
 ) -> Iterator[Path]:
-    """Every file name below ``roots``, without descending into linked folders."""
+    """Every file name below ``roots``, skipping linked folders and the trash."""
     for root in roots:
         for current_dir, dirs, filenames in os.walk(root, onerror=on_error):
             reporter.check_cancelled()
             current = Path(current_dir)
-            dirs[:] = [name for name in dirs if not _is_link_like(current / name)]
+            dirs[:] = [name for name in dirs if _should_descend(current / name)]
             yield from (current / filename for filename in filenames)
 
 
@@ -186,6 +189,11 @@ def _build_group(digest: str, paths: list[Path], size: int) -> DuplicateGroup:
 
 def _sort_key(path: Path) -> str:
     return str(path).casefold()
+
+
+def _should_descend(folder: Path) -> bool:
+    """Linked folders could loop or leave the roots; the trash holds removed files."""
+    return not _is_link_like(folder) and not is_trash_folder(folder)
 
 
 def _is_link_like(path: Path) -> bool:

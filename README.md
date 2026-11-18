@@ -28,12 +28,13 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
   - The copy you keep is re-verified first; if it changed or disappeared, the whole group is left untouched.
   - Every duplicate is re-hashed right before it is moved.
   - Nothing is deleted outright: files go to a **quarantine folder** (with a `manifest.jsonl` for restoring) or to the system **Recycle Bin**.
-- Hard links, symlinks and Windows junctions are handled correctly; empty files are ignored.
+- Hard links, symlinks and Windows junctions are handled correctly; empty files and the Recycle Bin / Trash are ignored.
 - Scanning and removal run in the background — the window never freezes, and both can be **cancelled**.
 - Access errors are never hidden; they can be reviewed in a separate window.
 - **Themes:** Light, Dark, or *Windows default*, which follows Windows' app mode live.
 - **Buttons are colored by what they do,** in both themes: the main next step (*Start scan*) is
-  blue, actions that remove files are red, everything else is neutral. All button text meets
+  blue, *Cancel* (while a task runs) is amber, actions that remove files are red, everything
+  else is neutral. All button text meets
   WCAG AA contrast (4.5:1), and disabled buttons look the same whatever their role.
 - **Languages:** English or Persian, switchable at any time without losing your results; the layout is mirrored for right-to-left.
 
@@ -110,6 +111,7 @@ duplicate_finder/
 ├── background.py    # runs work off the Tk thread and hands results back safely
 ├── validation.py    # user-input validation (e.g. empty / invalid folder)
 ├── file_types.py    # FileCategory presets, parse_extensions, ExtensionFilter
+├── trash_folders.py # is_trash_folder — Recycle Bin / Trash folders are never scanned
 ├── scan_folders.py  # ScanFolders — the chosen folders, kept unique and non-overlapping
 ├── i18n.py          # Language, Translator (with English fallback)
 ├── translations.py  # message catalogs — data only

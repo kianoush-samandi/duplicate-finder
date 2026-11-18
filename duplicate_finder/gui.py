@@ -44,6 +44,7 @@ MenuEntry = Optional[tuple[str, Callable[[], None], bool]]
 _PATH_COLUMN = "path"
 _LINK_HOVER_TAG = "path-link-hover"
 _RISKY_TAG = "risky"
+_INDETERMINATE_RANGE = 100  # ttk's default maximum; sets the busy animation's speed
 _MAX_LISTED_RISKY_FILES = 10  # more would not fit in a message box
 
 
@@ -525,10 +526,10 @@ class DuplicateFinderApp:
         )
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
-        # While busy the button cancels, which is not the main next step.
+        # While busy the same button cancels; amber makes it easy to find.
         self.scan_button.configure(
             text=t("scan.cancel" if self._busy else "scan.start"),
-            style=button_style(ButtonRole.NEUTRAL if self._busy else ButtonRole.PRIMARY),
+            style=button_style(ButtonRole.CAUTION if self._busy else ButtonRole.PRIMARY),
         )
 
         has_errors = bool(self._scan_result and self._scan_result.errors)
@@ -847,7 +848,8 @@ class DuplicateFinderApp:
             def wrapped(*args) -> None:
                 self._task = None
                 self.progress.stop()
-                self.progress.configure(mode="determinate", value=0)
+                self.progress.configure(mode="determinate", maximum=_INDETERMINATE_RANGE,
+                                        value=0)
                 handler(*args)
                 self._update_controls()
 
@@ -876,7 +878,10 @@ class DuplicateFinderApp:
                                          done=done, total=total))
         else:
             if str(self.progress.cget("mode")) != "indeterminate":
-                self.progress.configure(mode="indeterminate")
+                # The moving block's speed depends on ``maximum``; a total left over
+                # from the previous run would make it crawl or look frozen.
+                self.progress.configure(mode="indeterminate", maximum=_INDETERMINATE_RANGE,
+                                        value=0)
                 self.progress.start(10)
             self._set_status(lambda t: t("status.progress_unknown",
                                          stage=t(f"stage.{stage.value}"), done=done))

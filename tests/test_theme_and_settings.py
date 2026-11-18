@@ -92,3 +92,8 @@ def test_button_roles_look_different(palette):
 @pytest.mark.parametrize("palette", PALETTES)
 def test_warning_text_is_readable(palette):
     assert _contrast(palette.warning, palette.surface) >= WCAG_AA
+
+
+@pytest.mark.parametrize("palette", PALETTES)
+def test_disabled_fields_stand_apart_from_enabled_ones(palette):
+    assert _contrast(palette.surface, palette.disabled_field) >= 1.25
