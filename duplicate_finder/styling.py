@@ -165,6 +165,20 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
             indicatorbackground=[("selected", p.accent), ("disabled", p.background)],
         )
 
+    style.map(
+        "TCombobox",
+        fieldbackground=[("disabled", p.background), ("readonly", p.surface)],
+        bordercolor=[("focus", p.accent)],
+        arrowcolor=[("disabled", p.disabled_text)],
+    )
+    style.configure("TCombobox", arrowcolor=p.text, background=p.control)
+    # The drop-down list is a plain Tk listbox, reached only through the option database.
+    root = style.master
+    for option, value in (("background", p.surface), ("foreground", p.text),
+                          ("selectBackground", p.selection),
+                          ("selectForeground", p.selection_text)):
+        root.option_add(f"*TCombobox*Listbox.{option}", value)
+
     style.configure("Treeview", background=p.surface, fieldbackground=p.surface,
                     foreground=p.text)
     style.map(

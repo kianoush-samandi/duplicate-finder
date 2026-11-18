@@ -21,11 +21,13 @@ from .models import DuplicateGroup, FileIssue, IssueKind, ScanResult
 from .progress import ProgressCallback, ProgressReporter, Stage
 
 PathGroups = list[list[Path]]
+FileFilter = Callable[[Path], bool]
 
 
 def find_duplicates(
     *roots: Path,
     min_size: int = 1,
+    file_filter: Optional[FileFilter] = None,
     shared_only: bool = False,
     on_progress: Optional[ProgressCallback] = None,
     cancel_event: Optional[threading.Event] = None,
@@ -37,7 +39,8 @@ def find_duplicates(
     span two or more roots are returned (the files the folders have in common).
 
     Files smaller than ``min_size`` bytes are ignored (by default, empty files,
-    which are trivially "identical" but free no space).
+    which are trivially "identical" but free no space), and so are files
+    ``file_filter`` rejects (e.g. an ``ExtensionFilter``).
     Raises ``OperationCancelled`` if ``cancel_event`` is set.
     """
     if not roots:
@@ -46,7 +49,7 @@ def find_duplicates(
     reporter = ProgressReporter(on_progress, cancel_event)
     errors: list[FileIssue] = []
 
-    files_by_size = _collect_files_by_size(roots, min_size, reporter, errors)
+    files_by_size = _collect_files_by_size(roots, min_size, file_filter, reporter, errors)
     total_files = sum(len(paths) for paths in files_by_size.values())
 
     size_groups = [paths for paths in files_by_size.values() if len(paths) > 1]
@@ -80,7 +83,11 @@ def _roots_spanned(group: DuplicateGroup, roots: tuple[Path, ...]) -> int:
 
 
 def _collect_files_by_size(
-    roots: Iterable[Path], min_size: int, reporter: ProgressReporter, errors: list[FileIssue]
+    roots: Iterable[Path],
+    min_size: int,
+    file_filter: Optional[FileFilter],
+    reporter: ProgressReporter,
+    errors: list[FileIssue],
 ) -> dict[int, list[Path]]:
     """Walk every root and bucket regular files by size.
 
@@ -96,6 +103,8 @@ def _collect_files_by_size(
         errors.append(FileIssue.from_os_error(exc.filename, exc))
 
     for path in _walk_files(roots, reporter, on_walk_error):
+        if file_filter is not None and not file_filter(path):
+            continue  # checked first: it needs no disk access
         try:
             if _is_link_like(path):
                 continue

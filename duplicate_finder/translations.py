@@ -23,6 +23,16 @@ ENGLISH = {
     "folder.dialog_title": "Choose a folder to scan",
 
     "options.shared_only": "Only files shared between folders",
+    "options.filter_types": "Only these file types:",
+    "options.filter_types_hint": "Pick a type, or type extensions, e.g. pdf, docx",
+
+    "filetype.label": "{name} ({extensions})",
+    "filetype.documents": "Documents",
+    "filetype.pdf": "PDF",
+    "filetype.images": "Images",
+    "filetype.videos": "Videos",
+    "filetype.audio": "Audio",
+    "filetype.archives": "Archives",
 
     "scan.start": "Start scan",
     "scan.cancel": "Cancel",
@@ -82,6 +92,11 @@ ENGLISH = {
     "error.no_folder.body": (
         "You haven't added a folder yet.\n"
         "Please use “Add folder…” to choose the folders you want to scan."
+    ),
+    "error.no_extensions.title": "No file type chosen",
+    "error.no_extensions.body": (
+        "The file type filter is on, but no extension was given.\n"
+        "Pick a type from the list or type extensions such as: pdf, docx"
     ),
     "error.folder_included.title": "Folder already included",
     "error.folder_included.body": (
@@ -156,6 +171,16 @@ PERSIAN = {
     "folder.dialog_title": "انتخاب پوشه برای اسکن",
 
     "options.shared_only": "فقط فایل‌های مشترک بین پوشه‌ها",
+    "options.filter_types": "فقط این نوع فایل‌ها:",
+    "options.filter_types_hint": "یک نوع انتخاب کنید یا پسوندها را بنویسید، مثلاً pdf, docx",
+
+    "filetype.label": "{name} ({extensions})",
+    "filetype.documents": "اسناد",
+    "filetype.pdf": "PDF",
+    "filetype.images": "تصاویر",
+    "filetype.videos": "ویدیوها",
+    "filetype.audio": "صوتی",
+    "filetype.archives": "فایل‌های فشرده",
 
     "scan.start": "شروع اسکن",
     "scan.cancel": "لغو",
@@ -215,6 +240,11 @@ PERSIAN = {
     "error.no_folder.body": (
         "هنوز پوشه‌ای اضافه نکرده‌اید.\n"
         "لطفاً با دکمه‌ی «افزودن پوشه…» پوشه‌هایی را که می‌خواهید بررسی شوند انتخاب کنید."
+    ),
+    "error.no_extensions.title": "نوع فایلی انتخاب نشده",
+    "error.no_extensions.body": (
+        "فیلتر نوع فایل روشن است اما پسوندی وارد نشده.\n"
+        "یک نوع از فهرست انتخاب کنید یا پسوندها را بنویسید، مثلاً: pdf, docx"
     ),
     "error.folder_included.title": "پوشه از قبل در فهرست است",
     "error.folder_included.body": (

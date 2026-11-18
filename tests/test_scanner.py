@@ -4,6 +4,7 @@ import threading
 import pytest
 
 from duplicate_finder.errors import OperationCancelled
+from duplicate_finder.file_types import ExtensionFilter
 from duplicate_finder.hashing import PARTIAL_SIZE
 from duplicate_finder.scanner import find_duplicates
 
@@ -128,3 +129,13 @@ def test_overlapping_folders_do_not_report_a_file_twice(tmp_path, make_file):
 def test_at_least_one_folder_is_required():
     with pytest.raises(ValueError):
         find_duplicates()
+
+
+def test_file_filter_limits_which_files_are_compared(tmp_path, make_file):
+    pdfs = {make_file("a.pdf", b"same"), make_file("b.PDF", b"same")}
+    make_file("c.txt", b"same")
+
+    result = find_duplicates(tmp_path, file_filter=ExtensionFilter(frozenset({".pdf"})))
+
+    assert [set(group.files) for group in result.groups] == [pdfs]
+    assert result.total_files == 2

@@ -9,6 +9,8 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 
 - **Several folders at once:** add as many folders as you like; duplicates are matched across
   all of them. Tick *Only files shared between folders* to see just the files they have in common.
+- **Filter by file type:** tick *Only these file types* and pick a category (Documents, PDF,
+  Images, Videos, Audio, Archives) or type your own extensions, e.g. `pdf, docx`.
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
 - **You choose the copies to keep** in each group (double-click keeps only that copy), and can
   **skip** any group. At least one copy of every group is always kept.
@@ -97,6 +99,7 @@ duplicate_finder/
 ├── progress.py      # throttled progress reporting + cancellation, shared by all operations
 ├── background.py    # runs work off the Tk thread and hands results back safely
 ├── validation.py    # user-input validation (e.g. empty / invalid folder)
+├── file_types.py    # FileCategory presets, parse_extensions, ExtensionFilter
 ├── scan_folders.py  # ScanFolders — the chosen folders, kept unique and non-overlapping
 ├── i18n.py          # Language, Translator (with English fallback)
 ├── translations.py  # message catalogs — data only

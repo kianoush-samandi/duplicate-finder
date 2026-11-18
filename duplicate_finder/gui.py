@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from .app_icon import apply_app_icon, register_windows_app_id
 from .background import BackgroundTask
+from .file_types import ExtensionFilter, FileCategory, NoExtensionsError, parse_extensions
 from .file_opener import FileOpenError, is_launchable, open_file, reveal_file
 from .formatting import format_size
 from .i18n import Language, Translator
@@ -51,10 +52,12 @@ class ScanRequest:
     """What to scan and how; kept so the same scan can be repeated after a removal."""
 
     roots: tuple[Path, ...]
+    file_filter: Optional[ExtensionFilter]
     shared_only: bool
 
     def run(self, report: ProgressCallback, cancel: threading.Event) -> ScanResult:
-        return find_duplicates(*self.roots, shared_only=self.shared_only,
+        return find_duplicates(*self.roots, file_filter=self.file_filter,
+                               shared_only=self.shared_only,
                                on_progress=report, cancel_event=cancel)
 
 
@@ -75,6 +78,11 @@ class DuplicateFinderApp:
         self._plan: Optional[ReviewPlan] = None
         self._status: StatusMessage = _message("status.ready")
         self.shared_only_var = tk.BooleanVar(value=False)
+        self.type_filter_var = tk.BooleanVar(value=False)
+        self.file_types_var = tk.StringVar()
+        # A ready-made category picked from the list, or None for typed extensions.
+        # Kept apart from the text so the label can be re-translated on a rebuild.
+        self._file_category: Optional[FileCategory] = FileCategory.DOCUMENTS
         self.status_var = tk.StringVar()
         self.plan_var = tk.StringVar()
         self.theme_var = tk.StringVar(value=theme.mode.value)
@@ -126,7 +134,7 @@ class DuplicateFinderApp:
 
         self._build_header(main)
         self._build_folder_list(main)
-        self._build_options_row(main)
+        self._build_type_filter_row(main)
         self._build_scan_row(main)
 
         self.progress = ttk.Progressbar(main, mode="determinate")
@@ -206,13 +214,52 @@ class DuplicateFinderApp:
         self.folder_list.bind("<Delete>", lambda _event: self._remove_selected_folder())
         self._render_folders()
 
-    def _build_options_row(self, parent: ttk.Frame) -> None:
+        self.shared_only_check = ttk.Checkbutton(
+            parent, text=t("options.shared_only"), variable=self.shared_only_var
+        )
+        self.shared_only_check.pack(anchor=self._anchor, pady=(4, 0))
+
+    def _build_type_filter_row(self, parent: ttk.Frame) -> None:
+        t = self._t
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(8, 0))
-        self.shared_only_check = ttk.Checkbutton(
-            row, text=self._t("options.shared_only"), variable=self.shared_only_var
+        self.type_filter_check = ttk.Checkbutton(
+            row, text=t("options.filter_types"), variable=self.type_filter_var,
+            command=self._update_controls,
         )
-        self.shared_only_check.pack(side=self._start)
+        self.type_filter_check.pack(side=self._start)
+        self.file_types_box = ttk.Combobox(
+            row, textvariable=self.file_types_var, width=42,
+            values=[self._category_label(category) for category in FileCategory],
+        )
+        self.file_types_box.pack(side=self._start, padx=8)
+        self.file_types_box.bind("<<ComboboxSelected>>", self._on_file_category_selected)
+        self.file_types_box.bind("<Key>", self._on_file_types_typed)
+        if self._file_category is not None:
+            self.file_types_var.set(self._category_label(self._file_category))
+        ttk.Label(row, text=t("options.filter_types_hint"), style="Hint.TLabel").pack(
+            side=self._start
+        )
+
+    def _category_label(self, category: FileCategory) -> str:
+        extensions = ", ".join(sorted(ext.lstrip(".") for ext in category.extensions))
+        return self._t("filetype.label", name=self._t(f"filetype.{category.value}"),
+                       extensions=extensions)
+
+    def _on_file_category_selected(self, _event: tk.Event) -> None:
+        self._file_category = list(FileCategory)[self.file_types_box.current()]
+
+    def _on_file_types_typed(self, event: tk.Event) -> None:
+        if event.char or event.keysym in ("BackSpace", "Delete"):
+            self._file_category = None  # the text is now the user's own list
+
+    def _chosen_file_filter(self) -> Optional[ExtensionFilter]:
+        """The filter for the next scan; raises NoExtensionsError for an empty list."""
+        if not self.type_filter_var.get():
+            return None
+        if self._file_category is not None:
+            return ExtensionFilter(self._file_category.extensions)
+        return ExtensionFilter(parse_extensions(self.file_types_var.get()))
 
     def _build_scan_row(self, parent: ttk.Frame) -> None:
         row = ttk.Frame(parent)
@@ -423,6 +470,10 @@ class DuplicateFinderApp:
             state=_state(not self._busy and bool(self.folder_list.curselection()))
         )
         self.shared_only_check.configure(state=_state(not self._busy and len(self._folders) > 1))
+        self.type_filter_check.configure(state=idle)
+        self.file_types_box.configure(
+            state=_state(not self._busy and self.type_filter_var.get())
+        )
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
         self.scan_button.configure(text=t("scan.cancel" if self._busy else "scan.start"))
@@ -495,8 +546,13 @@ class DuplicateFinderApp:
         except FolderNotSelectedError:
             self._show_error("error.no_folder.title", "error.no_folder.body")
             return
+        try:
+            file_filter = self._chosen_file_filter()
+        except NoExtensionsError:
+            self._show_error("error.no_extensions.title", "error.no_extensions.body")
+            return
         shared_only = len(roots) > 1 and self.shared_only_var.get()
-        self._start_scan(ScanRequest(roots, shared_only))
+        self._start_scan(ScanRequest(roots, file_filter, shared_only))
 
     def _start_scan(self, request: ScanRequest) -> None:
         self._scan_request = request
