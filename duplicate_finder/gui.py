@@ -7,7 +7,9 @@ so a rebuild loses nothing and the layout can be mirrored for RTL languages.
 
 from __future__ import annotations
 
+import threading
 import tkinter as tk
+from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
@@ -19,14 +21,15 @@ from .file_opener import FileOpenError, is_launchable, open_file, reveal_file
 from .formatting import format_size
 from .i18n import Language, Translator
 from .models import FileIssue, RemovalReport, ScanResult
-from .progress import Stage
+from .progress import ProgressCallback, Stage
 from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
 from .review import ReviewPlan
+from .scan_folders import FolderAlreadyIncludedError, ScanFolders
 from .scanner import find_duplicates
 from .settings import SettingsStore, default_settings_path
-from .styling import ThemeManager, style_menu, style_text_widget
+from .styling import ThemeManager, style_listbox, style_menu, style_text_widget
 from .theme import ThemeMode
-from .validation import FolderNotSelectedError, NotAFolderError, parse_scan_folder
+from .validation import FolderNotSelectedError, NotAFolderError
 
 # A status line is stored as a function of the translator, so it can be
 # re-rendered in the new language after a switch.
@@ -43,21 +46,35 @@ def _message(key: str, **values) -> StatusMessage:
     return lambda t: t(key, **values)
 
 
+@dataclass(frozen=True)
+class ScanRequest:
+    """What to scan and how; kept so the same scan can be repeated after a removal."""
+
+    roots: tuple[Path, ...]
+    shared_only: bool
+
+    def run(self, report: ProgressCallback, cancel: threading.Event) -> ScanResult:
+        return find_duplicates(*self.roots, shared_only=self.shared_only,
+                               on_progress=report, cancel_event=cancel)
+
+
 class DuplicateFinderApp:
     def __init__(self, root: tk.Tk, theme: ThemeManager, store: SettingsStore) -> None:
         self.root = root
         self._theme = theme
         self._store = store
         self._t = Translator(store.load().language)
-        self.root.geometry("1000x680")
-        self.root.minsize(800, 520)
+        self.root.geometry("1040x760")
+        self.root.minsize(840, 600)
 
         # State that must survive a UI rebuild.
         self._task: Optional[BackgroundTask] = None
+        self._folders = ScanFolders()
+        self._scan_request: Optional[ScanRequest] = None
         self._scan_result: Optional[ScanResult] = None
         self._plan: Optional[ReviewPlan] = None
         self._status: StatusMessage = _message("status.ready")
-        self.folder_var = tk.StringVar()
+        self.shared_only_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar()
         self.plan_var = tk.StringVar()
         self.theme_var = tk.StringVar(value=theme.mode.value)
@@ -97,7 +114,7 @@ class DuplicateFinderApp:
 
     def _build_ui(self) -> None:
         t = self._t
-        rtl = t.language.is_rtl
+        self._rtl = rtl = t.language.is_rtl
         # Mirrored layout for right-to-left languages.
         self._start, self._end = ("right", "left") if rtl else ("left", "right")
         self._anchor = "e" if rtl else "w"
@@ -108,7 +125,8 @@ class DuplicateFinderApp:
         main.pack(fill="both", expand=True)
 
         self._build_header(main)
-        self._build_folder_row(main)
+        self._build_folder_list(main)
+        self._build_options_row(main)
         self._build_scan_row(main)
 
         self.progress = ttk.Progressbar(main, mode="determinate")
@@ -161,16 +179,40 @@ class DuplicateFinderApp:
     def _on_theme_selected(self) -> None:
         self._theme.set_mode(ThemeMode(self.theme_var.get()))
 
-    def _build_folder_row(self, parent: ttk.Frame) -> None:
+    def _build_folder_list(self, parent: ttk.Frame) -> None:
         t = self._t
+        ttk.Label(parent, text=t("folder.label")).pack(anchor=self._anchor)
         row = ttk.Frame(parent)
-        row.pack(fill="x")
-        ttk.Label(row, text=t("folder.label")).pack(side=self._start)
-        self.folder_entry = ttk.Entry(row, textvariable=self.folder_var)
-        self.folder_entry.pack(side=self._start, fill="x", expand=True, padx=8)
-        self.browse_button = ttk.Button(row, text=t("folder.browse"),
-                                        command=self._choose_folder)
-        self.browse_button.pack(side=self._start)
+        row.pack(fill="x", pady=(4, 0))
+
+        buttons = ttk.Frame(row)
+        buttons.pack(side=self._end, fill="y", padx=(8, 0) if not self._rtl else (0, 8))
+        self.add_folder_button = ttk.Button(buttons, text=t("folder.add"),
+                                            command=self._add_folder)
+        self.add_folder_button.pack(fill="x")
+        self.remove_folder_button = ttk.Button(buttons, text=t("folder.remove"),
+                                               command=self._remove_selected_folder)
+        self.remove_folder_button.pack(fill="x", pady=(4, 0))
+
+        # Paths are always left-to-right, even in an RTL layout.
+        self.folder_list = tk.Listbox(row, height=3, activestyle="none", relief="flat",
+                                      highlightthickness=1, exportselection=False)
+        self._theme.style_widget(self.folder_list, style_listbox(self.folder_list))
+        yscroll = ttk.Scrollbar(row, orient="vertical", command=self.folder_list.yview)
+        self.folder_list.configure(yscrollcommand=yscroll.set)
+        yscroll.pack(side=self._end, fill="y")
+        self.folder_list.pack(side=self._start, fill="both", expand=True)
+        self.folder_list.bind("<<ListboxSelect>>", lambda _event: self._update_controls())
+        self.folder_list.bind("<Delete>", lambda _event: self._remove_selected_folder())
+        self._render_folders()
+
+    def _build_options_row(self, parent: ttk.Frame) -> None:
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=(8, 0))
+        self.shared_only_check = ttk.Checkbutton(
+            row, text=self._t("options.shared_only"), variable=self.shared_only_var
+        )
+        self.shared_only_check.pack(side=self._start)
 
     def _build_scan_row(self, parent: ttk.Frame) -> None:
         row = ttk.Frame(parent)
@@ -375,8 +417,12 @@ class DuplicateFinderApp:
     def _update_controls(self) -> None:
         t = self._t
         idle = _state(not self._busy)
-        self.browse_button.configure(state=idle)
-        self.folder_entry.configure(state=idle)
+        self.add_folder_button.configure(state=idle)
+        self.folder_list.configure(state=idle)
+        self.remove_folder_button.configure(
+            state=_state(not self._busy and bool(self.folder_list.curselection()))
+        )
+        self.shared_only_check.configure(state=_state(not self._busy and len(self._folders) > 1))
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
         self.scan_button.configure(text=t("scan.cancel" if self._busy else "scan.start"))
@@ -411,10 +457,33 @@ class DuplicateFinderApp:
 
     # ------------------------------------------------------------------ scanning
 
-    def _choose_folder(self) -> None:
+    def _add_folder(self) -> None:
         selected = filedialog.askdirectory(title=self._t("folder.dialog_title"))
-        if selected:
-            self.folder_var.set(selected)
+        if not selected:
+            return
+        try:
+            self._folders.add(selected)
+        except NotAFolderError:
+            self._show_error("error.bad_folder.title", "error.bad_folder.body")
+            return
+        except FolderAlreadyIncludedError:
+            self._show_error("error.folder_included.title", "error.folder_included.body")
+            return
+        self._render_folders()
+        self._update_controls()
+
+    def _remove_selected_folder(self) -> None:
+        selection = self.folder_list.curselection()
+        if self._busy or not selection:
+            return
+        self._folders.remove(selection[0])
+        self._render_folders()
+        self._update_controls()
+
+    def _render_folders(self) -> None:
+        self.folder_list.delete(0, "end")
+        for folder in self._folders.folders:
+            self.folder_list.insert("end", str(folder))
 
     def _on_scan_clicked(self) -> None:
         if self._busy:
@@ -422,20 +491,19 @@ class DuplicateFinderApp:
             self._set_status(_message("status.cancelling"))
             return
         try:
-            folder = parse_scan_folder(self.folder_var.get())
+            roots = self._folders.require_any()
         except FolderNotSelectedError:
             self._show_error("error.no_folder.title", "error.no_folder.body")
             return
-        except NotAFolderError:
-            self._show_error("error.bad_folder.title", "error.bad_folder.body")
-            return
-        self._start_scan(folder)
+        shared_only = len(roots) > 1 and self.shared_only_var.get()
+        self._start_scan(ScanRequest(roots, shared_only))
 
-    def _start_scan(self, root: Path) -> None:
+    def _start_scan(self, request: ScanRequest) -> None:
+        self._scan_request = request
         self._set_results(None)
         self._set_status(_message("status.scanning"))
         self._run_task(
-            lambda report, cancel: find_duplicates(root, on_progress=report, cancel_event=cancel),
+            request.run,
             on_success=self._on_scan_finished,
             failure_title_key="error.scan_failed.title",
         )
@@ -535,7 +603,7 @@ class DuplicateFinderApp:
         if not folder:
             return
         try:
-            remover = QuarantineRemover(Path(folder), self._scan_result.root)
+            remover = QuarantineRemover(Path(folder), self._scan_result.roots)
         except ValueError:
             self._show_error("error.bad_folder.title", "error.bad_quarantine.body")
             return
@@ -592,7 +660,7 @@ class DuplicateFinderApp:
         messagebox.showinfo(t("result.title"), message)
         if report.failures:
             self._show_issues("dialog.failures.title", report.failures)
-        self._start_scan(self._scan_result.root)  # refresh with the same root
+        self._start_scan(self._scan_request)  # refresh with the same folders and options
 
     # ---------------------------------------------------------- task plumbing
 

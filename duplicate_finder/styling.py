@@ -97,6 +97,21 @@ def style_text_widget(text: tk.Text) -> WidgetStyler:
     return apply
 
 
+def style_listbox(listbox: tk.Listbox) -> WidgetStyler:
+    def apply(palette: Palette) -> None:
+        listbox.configure(
+            background=palette.surface,
+            foreground=palette.text,
+            selectbackground=palette.selection,
+            selectforeground=palette.selection_text,
+            disabledforeground=palette.disabled_text,
+            highlightbackground=palette.border,
+            highlightcolor=palette.accent,
+        )
+
+    return apply
+
+
 def style_menu(menu: tk.Menu) -> WidgetStyler:
     def apply(palette: Palette) -> None:
         menu.configure(
@@ -142,12 +157,13 @@ def _configure_ttk(style: ttk.Style, p: Palette) -> None:
         bordercolor=[("focus", p.accent)],
     )
 
-    style.configure("TRadiobutton", indicatorbackground=p.surface, indicatorforeground=p.text)
-    style.map(
-        "TRadiobutton",
-        background=[("active", p.background)],
-        indicatorbackground=[("selected", p.accent)],
-    )
+    for toggle in ("TRadiobutton", "TCheckbutton"):
+        style.configure(toggle, indicatorbackground=p.surface, indicatorforeground=p.text)
+        style.map(
+            toggle,
+            background=[("active", p.background)],
+            indicatorbackground=[("selected", p.accent), ("disabled", p.background)],
+        )
 
     style.configure("Treeview", background=p.surface, fieldbackground=p.surface,
                     foreground=p.text)

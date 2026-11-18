@@ -17,15 +17,18 @@ ENGLISH = {
     "theme.light": "Light",
     "theme.dark": "Dark",
 
-    "folder.label": "Folder to scan:",
-    "folder.browse": "Browse…",
+    "folder.label": "Folders to scan (duplicates are matched across all of them):",
+    "folder.add": "Add folder…",
+    "folder.remove": "Remove",
     "folder.dialog_title": "Choose a folder to scan",
+
+    "options.shared_only": "Only files shared between folders",
 
     "scan.start": "Start scan",
     "scan.cancel": "Cancel",
     "scan.show_errors": "Show errors",
 
-    "status.ready": "Choose a folder and start the scan.",
+    "status.ready": "Add one or more folders and start the scan.",
     "status.scanning": "Scanning…",
     "status.cancelling": "Cancelling…",
     "status.cancelled": "Operation cancelled.",
@@ -77,15 +80,20 @@ ENGLISH = {
 
     "error.no_folder.title": "No folder selected",
     "error.no_folder.body": (
-        "You haven't selected a folder yet.\n"
-        "Please use “Browse…” to choose the folder you want to scan."
+        "You haven't added a folder yet.\n"
+        "Please use “Add folder…” to choose the folders you want to scan."
+    ),
+    "error.folder_included.title": "Folder already included",
+    "error.folder_included.body": (
+        "This folder is already in the list, or inside a folder that is.\n"
+        "It will be scanned anyway."
     ),
     "error.bad_folder.title": "Invalid path",
     "error.bad_folder.body": (
         "The path does not exist or is not a folder.\nPlease choose a valid folder."
     ),
     "error.bad_quarantine.body": (
-        "The quarantine folder must not be inside the scanned folder, nor contain it."
+        "The quarantine folder must not be inside a scanned folder, nor contain one."
     ),
     "error.scan_failed.title": "Scan error",
     "error.removal_failed.title": "Move error",
@@ -142,15 +150,18 @@ PERSIAN = {
     "theme.light": "روشن",
     "theme.dark": "تیره",
 
-    "folder.label": "پوشه‌ی موردنظر:",
-    "folder.browse": "انتخاب پوشه…",
+    "folder.label": "پوشه‌های موردنظر (فایل‌های تکراری بین همه‌ی آن‌ها پیدا می‌شوند):",
+    "folder.add": "افزودن پوشه…",
+    "folder.remove": "حذف از فهرست",
     "folder.dialog_title": "انتخاب پوشه برای اسکن",
+
+    "options.shared_only": "فقط فایل‌های مشترک بین پوشه‌ها",
 
     "scan.start": "شروع اسکن",
     "scan.cancel": "لغو",
     "scan.show_errors": "نمایش خطاها",
 
-    "status.ready": "یک پوشه انتخاب کنید و اسکن را شروع کنید.",
+    "status.ready": "یک یا چند پوشه اضافه کنید و اسکن را شروع کنید.",
     "status.scanning": "در حال اسکن…",
     "status.cancelling": "در حال لغو…",
     "status.cancelled": "عملیات لغو شد.",
@@ -202,15 +213,20 @@ PERSIAN = {
 
     "error.no_folder.title": "پوشه‌ای انتخاب نشده",
     "error.no_folder.body": (
-        "هنوز پوشه‌ای انتخاب نکرده‌اید.\n"
-        "لطفاً با دکمه‌ی «انتخاب پوشه…» پوشه‌ای را که می‌خواهید بررسی شود انتخاب کنید."
+        "هنوز پوشه‌ای اضافه نکرده‌اید.\n"
+        "لطفاً با دکمه‌ی «افزودن پوشه…» پوشه‌هایی را که می‌خواهید بررسی شوند انتخاب کنید."
+    ),
+    "error.folder_included.title": "پوشه از قبل در فهرست است",
+    "error.folder_included.body": (
+        "این پوشه یا خودش در فهرست هست یا داخل پوشه‌ای از فهرست قرار دارد.\n"
+        "در هر صورت اسکن خواهد شد."
     ),
     "error.bad_folder.title": "مسیر نامعتبر",
     "error.bad_folder.body": (
         "مسیر واردشده وجود ندارد یا یک پوشه نیست.\nلطفاً یک پوشه‌ی معتبر انتخاب کنید."
     ),
     "error.bad_quarantine.body": (
-        "پوشه‌ی قرنطینه نباید داخل پوشه‌ی اسکن‌شده باشد و نباید آن را در بر بگیرد."
+        "پوشه‌ی قرنطینه نباید داخل یکی از پوشه‌های اسکن‌شده باشد و نباید یکی از آن‌ها را در بر بگیرد."
     ),
     "error.scan_failed.title": "خطا در اسکن",
     "error.removal_failed.title": "خطا در انتقال",

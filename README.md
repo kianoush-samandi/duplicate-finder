@@ -7,6 +7,8 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 
 ## Features
 
+- **Several folders at once:** add as many folders as you like; duplicates are matched across
+  all of them. Tick *Only files shared between folders* to see just the files they have in common.
 - **Fast three-stage comparison:** size → hash of the first 64 KiB → full BLAKE2b hash. Most non-duplicates are discarded without being read in full.
 - **You choose the copies to keep** in each group (double-click keeps only that copy), and can
   **skip** any group. At least one copy of every group is always kept.
@@ -95,6 +97,7 @@ duplicate_finder/
 ├── progress.py      # throttled progress reporting + cancellation, shared by all operations
 ├── background.py    # runs work off the Tk thread and hands results back safely
 ├── validation.py    # user-input validation (e.g. empty / invalid folder)
+├── scan_folders.py  # ScanFolders — the chosen folders, kept unique and non-overlapping
 ├── i18n.py          # Language, Translator (with English fallback)
 ├── translations.py  # message catalogs — data only
 ├── theme.py         # ThemeMode, palettes, Windows dark-mode detection — no Tk
@@ -125,6 +128,9 @@ message shown to the user can be translated.
 4. For the installer, add the language to `[Languages]` and `[CustomMessages]` in `packaging/installer.iss`.
 
 ## Restoring from quarantine
+
+With one scanned folder, files keep their layout below it; with several, each folder's files
+go below a sub-folder named after it.
 
 Each line of `manifest.jsonl` records one move:
 

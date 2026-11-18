@@ -52,7 +52,7 @@ class DuplicateGroup:
 
 @dataclass(frozen=True)
 class ScanResult:
-    root: Path
+    roots: tuple[Path, ...]
     groups: tuple[DuplicateGroup, ...]
     total_files: int
     errors: tuple[FileIssue, ...]

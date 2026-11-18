@@ -13,7 +13,7 @@ import stat as stat_module
 import threading
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable, Hashable, Optional
+from typing import Callable, Hashable, Iterable, Iterator, Optional
 
 from .errors import FileChangedError
 from .hashing import full_digest, partial_digest
@@ -24,23 +24,29 @@ PathGroups = list[list[Path]]
 
 
 def find_duplicates(
-    root: Path,
-    *,
+    *roots: Path,
     min_size: int = 1,
+    shared_only: bool = False,
     on_progress: Optional[ProgressCallback] = None,
     cancel_event: Optional[threading.Event] = None,
 ) -> ScanResult:
-    """Return every group of identical files below ``root``.
+    """Return every group of identical files below any of ``roots``.
+
+    Copies are matched across all roots, so a file in one folder and its twin
+    in another form a single group. With ``shared_only``, only groups that
+    span two or more roots are returned (the files the folders have in common).
 
     Files smaller than ``min_size`` bytes are ignored (by default, empty files,
     which are trivially "identical" but free no space).
     Raises ``OperationCancelled`` if ``cancel_event`` is set.
     """
-    root = Path(root).resolve()
+    if not roots:
+        raise ValueError("At least one folder is required.")
+    roots = tuple(Path(root).resolve() for root in roots)
     reporter = ProgressReporter(on_progress, cancel_event)
     errors: list[FileIssue] = []
 
-    files_by_size = _collect_files_by_size(root, min_size, reporter, errors)
+    files_by_size = _collect_files_by_size(roots, min_size, reporter, errors)
     total_files = sum(len(paths) for paths in files_by_size.values())
 
     size_groups = [paths for paths in files_by_size.values() if len(paths) > 1]
@@ -60,14 +66,23 @@ def find_duplicates(
     groups = [
         _build_group(str(digest), paths, size_of[paths[0]]) for digest, paths in full_groups
     ]
+    if shared_only:
+        groups = [group for group in groups if _roots_spanned(group, roots) > 1]
     groups.sort(key=lambda group: (-group.size, _sort_key(group.files[0])))
-    return ScanResult(root, tuple(groups), total_files, tuple(errors))
+    return ScanResult(roots, tuple(groups), total_files, tuple(errors))
+
+
+def _roots_spanned(group: DuplicateGroup, roots: tuple[Path, ...]) -> int:
+    """How many of ``roots`` hold at least one file of ``group``."""
+    return sum(
+        any(path.is_relative_to(root) for path in group.files) for root in roots
+    )
 
 
 def _collect_files_by_size(
-    root: Path, min_size: int, reporter: ProgressReporter, errors: list[FileIssue]
+    roots: Iterable[Path], min_size: int, reporter: ProgressReporter, errors: list[FileIssue]
 ) -> dict[int, list[Path]]:
-    """Walk ``root`` and bucket regular files by size.
+    """Walk every root and bucket regular files by size.
 
     Symlinks and Windows junctions are never followed, and hard links to an
     already-seen file are skipped: they share storage, so "removing" one
@@ -80,34 +95,40 @@ def _collect_files_by_size(
     def on_walk_error(exc: OSError) -> None:
         errors.append(FileIssue.from_os_error(exc.filename, exc))
 
-    for current_dir, dirs, filenames in os.walk(root, onerror=on_walk_error):
-        reporter.check_cancelled()
-        current = Path(current_dir)
-        dirs[:] = [name for name in dirs if not _is_link_like(current / name)]
-
-        for filename in filenames:
-            path = current / filename
-            try:
-                if _is_link_like(path):
-                    continue
-                stat = path.stat()
-            except OSError as exc:
-                errors.append(FileIssue.from_os_error(path, exc))
+    for path in _walk_files(roots, reporter, on_walk_error):
+        try:
+            if _is_link_like(path):
                 continue
+            stat = path.stat()
+        except OSError as exc:
+            errors.append(FileIssue.from_os_error(path, exc))
+            continue
 
-            # Excludes FIFOs, sockets and devices, which must never be read.
-            if not stat_module.S_ISREG(stat.st_mode) or stat.st_size < min_size:
-                continue
-            inode = (stat.st_dev, stat.st_ino)
-            if inode in seen_inodes:
-                continue
-            seen_inodes.add(inode)
+        # Excludes FIFOs, sockets and devices, which must never be read.
+        if not stat_module.S_ISREG(stat.st_mode) or stat.st_size < min_size:
+            continue
+        inode = (stat.st_dev, stat.st_ino)
+        if inode in seen_inodes:  # also covers a file reached through two roots
+            continue
+        seen_inodes.add(inode)
 
-            files_by_size[stat.st_size].append(path)
-            count += 1
-            reporter.report(Stage.COLLECTING, count)
+        files_by_size[stat.st_size].append(path)
+        count += 1
+        reporter.report(Stage.COLLECTING, count)
 
     return files_by_size
+
+
+def _walk_files(
+    roots: Iterable[Path], reporter: ProgressReporter, on_error: Callable[[OSError], None]
+) -> Iterator[Path]:
+    """Every file name below ``roots``, without descending into linked folders."""
+    for root in roots:
+        for current_dir, dirs, filenames in os.walk(root, onerror=on_error):
+            reporter.check_cancelled()
+            current = Path(current_dir)
+            dirs[:] = [name for name in dirs if not _is_link_like(current / name)]
+            yield from (current / filename for filename in filenames)
 
 
 def _regroup(
