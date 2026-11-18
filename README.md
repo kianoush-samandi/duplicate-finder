@@ -32,6 +32,9 @@ Available in **English** (default) and **Persian (فارسی)**, with light and 
 - Scanning and removal run in the background — the window never freezes, and both can be **cancelled**.
 - Access errors are never hidden; they can be reviewed in a separate window.
 - **Themes:** Light, Dark, or *Windows default*, which follows Windows' app mode live.
+- **Buttons are colored by what they do,** in both themes: the main next step (*Start scan*) is
+  blue, actions that remove files are red, everything else is neutral. All button text meets
+  WCAG AA contrast (4.5:1), and disabled buttons look the same whatever their role.
 - **Languages:** English or Persian, switchable at any time without losing your results; the layout is mirrored for right-to-left.
 
 Theme and language choices are saved to `%APPDATA%\DuplicateFinder\settings.json` (Windows) or `~/.config/DuplicateFinder/settings.json`.

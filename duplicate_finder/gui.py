@@ -30,8 +30,8 @@ from .risk import RiskAssessor, RiskReason
 from .scan_folders import FolderAlreadyIncludedError, ScanFolders
 from .scanner import find_duplicates
 from .settings import SettingsStore, default_settings_path
-from .styling import ThemeManager, style_listbox, style_menu, style_text_widget
-from .theme import ThemeMode
+from .styling import ThemeManager, button_style, style_listbox, style_menu, style_text_widget
+from .theme import ButtonRole, ThemeMode
 from .validation import FolderNotSelectedError, NotAFolderError
 
 # A status line is stored as a function of the translator, so it can be
@@ -495,11 +495,13 @@ class DuplicateFinderApp:
         t = self._t
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(8, 0))
+        removes_files = button_style(ButtonRole.DESTRUCTIVE)
         self.quarantine_button = ttk.Button(row, text=t("action.quarantine"),
-                                            command=self._remove_to_quarantine)
+                                            command=self._remove_to_quarantine,
+                                            style=removes_files)
         self.quarantine_button.pack(side=self._start)
         self.trash_button = ttk.Button(row, text=t("action.trash"),
-                                       command=self._remove_to_trash)
+                                       command=self._remove_to_trash, style=removes_files)
         self.trash_button.pack(side=self._start, padx=8)
 
     # ------------------------------------------------------------ control state
@@ -523,7 +525,11 @@ class DuplicateFinderApp:
         )
         for button in self._language_buttons:  # a rebuild mid-task is not worth the risk
             button.configure(state=idle)
-        self.scan_button.configure(text=t("scan.cancel" if self._busy else "scan.start"))
+        # While busy the button cancels, which is not the main next step.
+        self.scan_button.configure(
+            text=t("scan.cancel" if self._busy else "scan.start"),
+            style=button_style(ButtonRole.NEUTRAL if self._busy else ButtonRole.PRIMARY),
+        )
 
         has_errors = bool(self._scan_result and self._scan_result.errors)
         self.errors_button.configure(state=_state(not self._busy and has_errors))

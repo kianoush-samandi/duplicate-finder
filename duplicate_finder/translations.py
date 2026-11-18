@@ -24,7 +24,7 @@ ENGLISH = {
 
     "options.shared_only": "Only files shared between folders",
     "options.filter_types": "Only these file types:",
-    "options.filter_types_hint": "Pick a type, or type extensions, e.g. pdf, docx",
+    "options.filter_types_hint": "or type extensions, e.g. pdf, docx",
 
     "filetype.label": "{name} ({extensions})",
     "filetype.documents": "Documents",
@@ -198,7 +198,7 @@ PERSIAN = {
 
     "options.shared_only": "فقط فایل‌های مشترک بین پوشه‌ها",
     "options.filter_types": "فقط این نوع فایل‌ها:",
-    "options.filter_types_hint": "یک نوع انتخاب کنید یا پسوندها را بنویسید، مثلاً pdf, docx",
+    "options.filter_types_hint": "یا پسوندها را بنویسید، مثلاً pdf, docx",
 
     "filetype.label": "{name} ({extensions})",
     "filetype.documents": "اسناد",

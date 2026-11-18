@@ -14,6 +14,25 @@ class ThemeMode(Enum):
     DARK = "dark"
 
 
+class ButtonRole(Enum):
+    """What a button does, so its color can warn before it is pressed.
+
+    Color is never the only cue: every button also says what it does.
+    """
+
+    NEUTRAL = "neutral"  # everyday actions that change nothing on disk
+    PRIMARY = "primary"  # the main next step (one per screen)
+    DESTRUCTIVE = "destructive"  # removes files
+
+
+@dataclass(frozen=True)
+class ButtonColors:
+    background: str
+    hover: str  # also used while pressed
+    text: str  # readable (WCAG AA, 4.5:1) on both backgrounds
+    border: str
+
+
 @dataclass(frozen=True)
 class Palette:
     is_dark: bool
@@ -29,6 +48,15 @@ class Palette:
     selection: str
     selection_text: str
     warning: str  # text of risky items; readable on ``surface``
+    primary_button: ButtonColors
+    destructive_button: ButtonColors
+
+    def button_colors(self, role: ButtonRole) -> ButtonColors:
+        if role is ButtonRole.PRIMARY:
+            return self.primary_button
+        if role is ButtonRole.DESTRUCTIVE:
+            return self.destructive_button
+        return ButtonColors(self.control, self.control_hover, self.text, self.border)
 
 
 LIGHT_PALETTE = Palette(
@@ -45,6 +73,10 @@ LIGHT_PALETTE = Palette(
     selection="#cce4f7",
     selection_text="#1b1b1b",
     warning="#9d5d00",
+    primary_button=ButtonColors(background="#0067c0", hover="#005a9e", text="#ffffff",
+                                border="#0067c0"),
+    destructive_button=ButtonColors(background="#c42b1c", hover="#a52416", text="#ffffff",
+                                    border="#c42b1c"),
 )
 
 DARK_PALETTE = Palette(
@@ -61,6 +93,11 @@ DARK_PALETTE = Palette(
     selection="#1f4f78",
     selection_text="#ffffff",
     warning="#fce100",
+    # Lighter tones with dark text, as dark themes use, so they don't glare.
+    primary_button=ButtonColors(background="#4cc2ff", hover="#3aa8e0", text="#000000",
+                                border="#4cc2ff"),
+    destructive_button=ButtonColors(background="#f1707a", hover="#e05a63", text="#000000",
+                                    border="#f1707a"),
 )
 
 _PERSONALIZE_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
