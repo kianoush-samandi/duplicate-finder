@@ -48,7 +48,7 @@ notes are on the [Releases page](https://github.com/kianoush-samandi/duplicate-f
 
 ## Run from source
 
-Python 3.9+:
+Python 3.10+:
 
 ```bash
 git clone https://github.com/kianoush-samandi/duplicate-finder.git
