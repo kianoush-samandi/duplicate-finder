@@ -28,6 +28,7 @@ class Palette:
     accent: str
     selection: str
     selection_text: str
+    warning: str  # text of risky items; readable on ``surface``
 
 
 LIGHT_PALETTE = Palette(
@@ -43,6 +44,7 @@ LIGHT_PALETTE = Palette(
     accent="#0067c0",
     selection="#cce4f7",
     selection_text="#1b1b1b",
+    warning="#9d5d00",
 )
 
 DARK_PALETTE = Palette(
@@ -58,6 +60,7 @@ DARK_PALETTE = Palette(
     accent="#4cc2ff",
     selection="#1f4f78",
     selection_text="#ffffff",
+    warning="#fce100",
 )
 
 _PERSONALIZE_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"

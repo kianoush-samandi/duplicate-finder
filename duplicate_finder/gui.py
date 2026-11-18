@@ -26,6 +26,7 @@ from .progress import ProgressCallback, Stage
 from .removal import QuarantineRemover, Remover, TrashRemover, remove_duplicates
 from .result_order import SortField, ordered_group_indices
 from .review import ReviewPlan
+from .risk import RiskAssessor, RiskReason
 from .scan_folders import FolderAlreadyIncludedError, ScanFolders
 from .scanner import find_duplicates
 from .settings import SettingsStore, default_settings_path
@@ -42,6 +43,8 @@ MenuEntry = Optional[tuple[str, Callable[[], None], bool]]
 
 _PATH_COLUMN = "path"
 _LINK_HOVER_TAG = "path-link-hover"
+_RISKY_TAG = "risky"
+_MAX_LISTED_RISKY_FILES = 10  # more would not fit in a message box
 
 
 def _message(key: str, **values) -> StatusMessage:
@@ -63,10 +66,12 @@ class ScanRequest:
 
 
 class DuplicateFinderApp:
-    def __init__(self, root: tk.Tk, theme: ThemeManager, store: SettingsStore) -> None:
+    def __init__(self, root: tk.Tk, theme: ThemeManager, store: SettingsStore,
+                 risk: RiskAssessor) -> None:
         self.root = root
         self._theme = theme
         self._store = store
+        self._risk = risk
         self._t = Translator(store.load().language)
         self.root.geometry("1040x760")
         self.root.minsize(840, 600)
@@ -77,6 +82,7 @@ class DuplicateFinderApp:
         self._scan_request: Optional[ScanRequest] = None
         self._scan_result: Optional[ScanResult] = None
         self._plan: Optional[ReviewPlan] = None
+        self._risky_files: dict[Path, frozenset[RiskReason]] = {}
         self._status: StatusMessage = _message("status.ready")
         self.shared_only_var = tk.BooleanVar(value=False)
         self.type_filter_var = tk.BooleanVar(value=False)
@@ -317,10 +323,10 @@ class DuplicateFinderApp:
             selectmode="browse",
         )
         for column, key, width, anchor in (
-            ("#0", "tree.heading.item", 260, self._anchor),
+            ("#0", "tree.heading.item", 320, self._anchor),
             ("action", "tree.heading.action", 190, self._anchor),
             ("size", "tree.heading.size", 100, "e"),
-            (_PATH_COLUMN, "tree.heading.path", 440, "w"),  # paths are always left-to-right
+            (_PATH_COLUMN, "tree.heading.path", 380, "w"),  # paths are always left-to-right
         ):
             self.tree.heading(column, text=t(key), anchor=anchor)
             self.tree.column(column, width=width, minwidth=80, anchor=anchor)
@@ -348,8 +354,12 @@ class DuplicateFinderApp:
         link_font.configure(underline=True)
         self._link_font = link_font  # Tk fonts vanish once garbage-collected
         self._hovered_link = None
-        self._theme.style_widget(self.tree, lambda palette: self.tree.tag_configure(
-            _LINK_HOVER_TAG, foreground=palette.accent, font=link_font))
+        self._theme.style_widget(self.tree, lambda palette: (
+            self.tree.tag_configure(_RISKY_TAG, foreground=palette.warning),
+            # Configured last, so it wins over the risky color while hovered.
+            self.tree.tag_configure(_LINK_HOVER_TAG, foreground=palette.accent,
+                                    font=link_font),
+        ))
 
         self.tree.bind("<Motion>", self._on_tree_motion)
         self.tree.bind("<Leave>", lambda _event: self._set_hovered_link(None))
@@ -373,9 +383,9 @@ class DuplicateFinderApp:
         if item == self._hovered_link:
             return
         if self._hovered_link is not None and self.tree.exists(self._hovered_link):
-            self.tree.item(self._hovered_link, tags=())
+            self.tree.item(self._hovered_link, tags=self._row_tags(self._hovered_link))
         if item is not None:
-            self.tree.item(item, tags=(_LINK_HOVER_TAG,))
+            self.tree.item(item, tags=self._row_tags(item) + (_LINK_HOVER_TAG,))
         self.tree.configure(cursor="hand2" if item is not None else "")
         self._hovered_link = item
 
@@ -622,6 +632,9 @@ class DuplicateFinderApp:
     def _set_results(self, result: Optional[ScanResult]) -> None:
         self._scan_result = result
         self._plan = ReviewPlan(result.groups) if result else None
+        self._risky_files = self._risk.risky_files(
+            path for group in (result.groups if result else ()) for path in group.files
+        )
         self._populate_tree()
         self._update_controls()
 
@@ -633,16 +646,53 @@ class DuplicateFinderApp:
         self._group_numbers.clear()
         if self._plan is None:
             return
+        order = ordered_group_indices(self._plan.groups, self._sort_field,
+                                      self._sort_descending)
+        risky = [index for index in order if self._is_risky_group(index)]
+        if not risky:
+            self._insert_groups("", order, first_number=1)
+            return
+        # Risky groups get a section of their own, listed first, so they are
+        # reviewed together and never mistaken for ordinary duplicates.
+        others = [index for index in order if not self._is_risky_group(index)]
+        sections = (("tree.section.risky", risky, (_RISKY_TAG,)),
+                    ("tree.section.other", others, ()))
+        number = 1
+        for key, indices, tags in sections:
+            if indices:
+                section_id = self.tree.insert("", "end", open=True, tags=tags,
+                                              text=self._t(key, count=len(indices)))
+                self._insert_groups(section_id, indices, first_number=number)
+                number += len(indices)
+
+    def _insert_groups(self, parent: str, indices: list[int], first_number: int) -> None:
         groups = self._plan.groups
-        order = ordered_group_indices(groups, self._sort_field, self._sort_descending)
-        for number, index in enumerate(order, start=1):
-            group_id = self.tree.insert("", "end", open=True)
+        for number, index in enumerate(indices, start=first_number):
+            group_id = self.tree.insert(parent, "end", open=True)
             self._group_item_ids[index] = group_id
             self._group_numbers[index] = number
             self._item_targets[group_id] = (index, None)
             for path in groups[index].files:
                 self._item_targets[self.tree.insert(group_id, "end")] = (index, path)
             self._render_group(index)
+
+    def _is_risky_group(self, index: int) -> bool:
+        return any(path in self._risky_files for path in self._plan.groups[index].files)
+
+    def _row_tags(self, item: str) -> tuple[str, ...]:
+        _, path = self._item_targets.get(item, (None, None))
+        return (_RISKY_TAG,) if path in self._risky_files else ()
+
+    def _file_label(self, path: Path) -> str:
+        reasons = self._risky_files.get(path)
+        if not reasons:
+            return path.name
+        return self._t("tree.risky_file", name=path.name,
+                       reasons=self._describe_reasons(reasons))
+
+    def _describe_reasons(self, reasons: frozenset[RiskReason]) -> str:
+        ordered = [reason for reason in RiskReason if reason in reasons]  # stable order
+        return self._t("risk.separator").join(self._t(f"risk.{r.value}") for r in ordered)
 
     def _render_group(self, index: int) -> None:
         t = self._t
@@ -666,7 +716,8 @@ class DuplicateFinderApp:
                 action = t("tree.unchanged")
             else:
                 action = t("tree.keep" if self._plan.is_kept(index, path) else "tree.remove")
-            self.tree.item(file_id, text=path.name, values=(action, size, str(path)))
+            self.tree.item(file_id, text=self._file_label(path),
+                           values=(action, size, str(path)), tags=self._row_tags(file_id))
 
     def _selected_target(self) -> tuple[Optional[int], Optional[Path]]:
         selection = self.tree.selection()
@@ -714,10 +765,13 @@ class DuplicateFinderApp:
 
     def _confirm_and_remove(self, remover: Remover, lead: str) -> None:
         t = self._t
+        selections = self._plan.selections()
+        to_remove = [path for selection in selections for path in selection.files_to_remove]
+        if not self._confirm_risky_removal(to_remove):
+            return
         details = t("confirm.details", size=format_size(self._plan.reclaimable_bytes))
         if not messagebox.askyesno(t("confirm.title"), f"{lead}\n\n{details}", icon="warning"):
             return
-        selections = self._plan.selections()
         self._run_task(
             lambda report, cancel: remove_duplicates(
                 selections, remover, on_progress=report, cancel_event=cancel
@@ -728,6 +782,8 @@ class DuplicateFinderApp:
 
     def _delete_now(self, group_index: int, path: Path) -> None:
         t = self._t
+        if not self._confirm_risky_removal([path]):
+            return
         if not messagebox.askyesno(t("confirm.delete_now.title"),
                                    t("confirm.delete_now.body", path=path), icon="warning"):
             return
@@ -739,6 +795,25 @@ class DuplicateFinderApp:
             on_success=lambda report: self._on_delete_now_finished(group_index, path, report),
             failure_title_key="error.removal_failed.title",
         )
+
+    def _confirm_risky_removal(self, paths: list[Path]) -> bool:
+        """Warn before risky files are removed; True if there are none or the user agrees.
+
+        This comes on top of the usual confirmation and defaults to "No", so a
+        hurried Enter cannot remove a program or system file.
+        """
+        risky = [path for path in paths if path in self._risky_files]
+        if not risky:
+            return True
+        t = self._t
+        lines = [t("confirm.risky.item", path=path,
+                   reasons=self._describe_reasons(self._risky_files[path]))
+                 for path in risky[:_MAX_LISTED_RISKY_FILES]]
+        if len(risky) > _MAX_LISTED_RISKY_FILES:
+            lines.append(t("confirm.risky.more", count=len(risky) - _MAX_LISTED_RISKY_FILES))
+        body = t("confirm.risky.body", count=len(risky), files="\n".join(lines))
+        return messagebox.askyesno(t("confirm.risky.title"), body, icon="warning",
+                                   default="no")
 
     def _on_delete_now_finished(self, group_index: int, path: Path,
                                 report: RemovalReport) -> None:
@@ -851,7 +926,7 @@ def main() -> None:
     store = SettingsStore(default_settings_path())
     theme = ThemeManager(root, store)
     theme.start()
-    DuplicateFinderApp(root, theme, store)
+    DuplicateFinderApp(root, theme, store, RiskAssessor.for_this_computer())
     root.mainloop()
 
 

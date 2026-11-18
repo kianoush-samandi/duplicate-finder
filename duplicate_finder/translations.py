@@ -71,6 +71,9 @@ ENGLISH = {
     "tree.group": "Group {number} ({count} files)",
     "tree.group_skipped_suffix": " — skipped",
     "tree.group_reclaimable": "Frees {size}",
+    "tree.section.risky": "⚠ Risky to remove ({count:,} groups)",
+    "tree.section.other": "Other duplicates ({count:,} groups)",
+    "tree.risky_file": "⚠ {name} ({reasons})",
     "tree.keep": "✔ Keep",
     "tree.remove": "✖ Remove",
     "tree.unchanged": "— Unchanged",
@@ -138,6 +141,22 @@ ENGLISH = {
         "It is first compared again with another identical copy, which stays in place. "
         "Continue?"
     ),
+
+    "risk.system_folder": "system folder",
+    "risk.app_data": "app data",
+    "risk.program_file": "program file",
+    "risk.separator": ", ",
+    "confirm.risky.title": "Warning: risky files",
+    "confirm.risky.body": (
+        "{count:,} of the files to remove may be needed by the operating system or by a program:\n\n"
+        "{files}\n\n"
+        "An identical copy will stay in place, but programs usually look for their "
+        "files in one exact location, so removing these copies can stop a program or "
+        "the system from working.\n\n"
+        "Remove them anyway? Choose “No” to go back and keep or skip them."
+    ),
+    "confirm.risky.item": "• {path} — {reasons}",
+    "confirm.risky.more": "… and {count:,} more",
 
     "confirm.title": "Confirm removal",
     "confirm.lead.quarantine": "{count:,} duplicate files will be moved to:\n{folder}",
@@ -226,6 +245,9 @@ PERSIAN = {
     "tree.group": "گروه {number} ({count} فایل)",
     "tree.group_skipped_suffix": " — رد شده",
     "tree.group_reclaimable": "آزاد می‌شود: {size}",
+    "tree.section.risky": "⚠ حذف پرخطر ({count:,} گروه)",
+    "tree.section.other": "سایر فایل‌های تکراری ({count:,} گروه)",
+    "tree.risky_file": "⚠ {name} ({reasons})",
     "tree.keep": "✔ نگه‌داشته می‌شود",
     "tree.remove": "✖ حذف می‌شود",
     "tree.unchanged": "— بدون تغییر",
@@ -293,6 +315,23 @@ PERSIAN = {
         "پیش از آن دوباره با یک نسخه‌ی یکسان دیگر مقایسه می‌شود که سر جایش می‌ماند. "
         "ادامه می‌دهید؟"
     ),
+
+    "risk.system_folder": "پوشه‌ی سیستمی",
+    "risk.app_data": "داده‌ی برنامه",
+    "risk.program_file": "فایل اجرایی/برنامه",
+    "risk.separator": "، ",
+    "confirm.risky.title": "هشدار: فایل‌های خطرناک",
+    "confirm.risky.body": (
+        "{count:,} فایل از فایل‌هایی که حذف می‌شوند ممکن است مورد نیاز سیستم‌عامل یا یک "
+        "برنامه باشند:\n\n"
+        "{files}\n\n"
+        "یک نسخه‌ی یکسان سر جایش می‌ماند، اما برنامه‌ها معمولاً فایل‌هایشان را فقط در "
+        "یک مسیر مشخص جست‌وجو می‌کنند؛ پس حذف این نسخه‌ها ممکن است باعث از کار افتادن "
+        "یک برنامه یا خود سیستم شود.\n\n"
+        "با این حال حذف شوند؟ برای بازگشت و نگه‌داشتن یا رد کردن آن‌ها «خیر» را بزنید."
+    ),
+    "confirm.risky.item": "• {path} — {reasons}",
+    "confirm.risky.more": "… و {count:,} فایل دیگر",
 
     "confirm.title": "تأیید حذف",
     "confirm.lead.quarantine": "{count:,} فایل تکراری به این پوشه منتقل می‌شوند:\n{folder}",
